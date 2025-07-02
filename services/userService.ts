@@ -4,12 +4,12 @@ import db from '@/lib/db'
 import { User } from '@/lib/generated/prisma'
 
 export async function findUserByCredentials(
-  email: string,
+  username: string,
   password: string,
 ): Promise<User | null> {
   const user = await db.user.findFirst({
     where: {
-      email,
+      username,
     },
   })
 

@@ -3,17 +3,23 @@ import CredentialsProvider from 'next-auth/providers/credentials'
 
 import { findUserByCredentials } from './services/userService'
 
+declare module 'next-auth' {
+  interface User {
+    username: string
+  }
+}
+
 export const { handlers, signIn, signOut, auth } = NextAuth({
   providers: [
     CredentialsProvider({
       name: 'Credentials',
       credentials: {
-        email: {},
+        username: {},
         password: {},
       },
       async authorize(credentials) {
         const user = await findUserByCredentials(
-          credentials.email as string,
+          credentials.username as string,
           credentials.password as string,
         )
 
@@ -24,6 +30,7 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
         return {
           id: user.id,
           name: user.name,
+          username: user.username,
           email: user.email,
         }
       },

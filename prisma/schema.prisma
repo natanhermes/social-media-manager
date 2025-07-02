@@ -19,6 +19,7 @@ model User {
   id        String   @id @default(uuid())
   name      String
   email     String   @unique
+  username  String   @unique
   password  String
   company   String?
   bio       String?
@@ -27,6 +28,8 @@ model User {
   platforms Platform[]
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+
+  @@unique([username, email])
 }
 
 model Message {

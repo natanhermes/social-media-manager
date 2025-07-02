@@ -7,7 +7,7 @@ import { signIn } from '@/auth'
 export async function loginAction(_prevState: unknown, formData: FormData) {
   try {
     await signIn('credentials', {
-      email: formData.get('email'),
+      username: formData.get('username'),
       password: formData.get('password'),
       redirectTo: '/dashboard',
     })

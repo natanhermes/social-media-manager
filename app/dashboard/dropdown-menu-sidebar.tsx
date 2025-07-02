@@ -1,5 +1,8 @@
+'use client'
+
 import { LogOut, Settings, User } from 'lucide-react'
 import Form from 'next/form'
+import { useSession } from 'next-auth/react'
 
 import { logoutAction } from '@/actions/logoutAction'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
@@ -14,6 +17,25 @@ import {
 } from '@/components/ui/dropdown-menu'
 
 export function DropdownMenuSidebar() {
+  const { data: session } = useSession()
+
+  if (!session) {
+    return (
+      <div className="p-4">
+        <div className="w-full h-12 bg-gray-200 animate-pulse rounded-lg"></div>
+      </div>
+    )
+  }
+
+  const getInitials = (name: string) => {
+    return name
+      .split(' ')
+      .map((n) => n[0])
+      .join('')
+      .toUpperCase()
+      .slice(0, 2)
+  }
+
   return (
     <div className="p-4 border-t">
       <DropdownMenu>
@@ -21,11 +43,15 @@ export function DropdownMenuSidebar() {
           <Button variant="ghost" className="w-full justify-start gap-3 p-3">
             <Avatar className="h-8 w-8">
               <AvatarImage src="/placeholder-user.jpg" />
-              <AvatarFallback>JD</AvatarFallback>
+              <AvatarFallback>
+                {getInitials(session.user?.name || 'User')}
+              </AvatarFallback>
             </Avatar>
             <div className="text-left">
-              <p className="text-sm font-medium">João Silva</p>
-              <p className="text-xs text-muted-foreground">joao@email.com</p>
+              <p className="text-sm font-medium">{session.user?.name}</p>
+              <p className="text-xs text-muted-foreground">
+                {session.user?.email}
+              </p>
             </div>
           </Button>
         </DropdownMenuTrigger>

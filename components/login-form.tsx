@@ -16,12 +16,12 @@ export function LoginForm() {
     <>
       <Form action={formAction} className="space-y-4">
         <div className="space-y-2">
-          <Label htmlFor="email">Email</Label>
+          <Label htmlFor="username">Nome de usuário</Label>
           <Input
-            id="email"
-            type="email"
-            name="email"
-            placeholder="seu@email.com"
+            id="username"
+            type="text"
+            name="username"
+            placeholder="seu_usuario"
             required
           />
         </div>
