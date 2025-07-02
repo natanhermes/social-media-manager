@@ -1,0 +1,73 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+// Looking for ways to speed up your queries, or scale easily with your serverless or edge functions?
+// Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
+
+generator client {
+  provider = "prisma-client-js"
+  output   = "../lib/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+model User {
+  id        String   @id @default(uuid())
+  name      String
+  email     String   @unique
+  password  String
+  company   String?
+  bio       String?
+  messages  Message[]
+  settings  Settings?
+  platforms Platform[]
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model Message {
+  id         String   @id @default(uuid())
+  content    String
+  sentAt     DateTime
+  status     MessageStatus
+  platforms  MessagePlatform[]
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId     String
+  createdAt  DateTime @default(now())
+}
+
+enum MessageStatus {
+  success
+  failed
+  pending
+}
+
+model Platform {
+  id        String   @id @default(uuid())
+  name      String
+  token     String?
+  connected Boolean  @default(false)
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId    String
+}
+
+model Settings {
+  id                  String   @id @default(uuid())
+  emailNotifications  Boolean  @default(true)
+  pushNotifications   Boolean  @default(false)
+  smsNotifications    Boolean  @default(false)
+  weeklyReport        Boolean  @default(true)
+  user                User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId              String   @unique
+}
+
+model MessagePlatform {
+  id         String   @id @default(uuid())
+  message    Message @relation(fields: [messageId], references: [id], onDelete: Cascade)
+  messageId  String
+  platform   String
+}
