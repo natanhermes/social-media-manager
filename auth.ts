@@ -6,6 +6,7 @@ import { findUserByCredentials } from './services/userService'
 declare module 'next-auth' {
   interface User {
     username: string
+    bio: string | null
   }
 }
 
@@ -32,6 +33,7 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
           name: user.name,
           username: user.username,
           email: user.email,
+          bio: user.bio,
         }
       },
     }),

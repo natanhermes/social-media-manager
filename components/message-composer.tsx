@@ -5,7 +5,7 @@ import { Calendar, Send } from 'lucide-react'
 import { useState } from 'react'
 import { useForm } from 'react-hook-form'
 
-import { usePlataforms } from '@/hooks/queries/usePlataforms'
+import { usePlatforms } from '@/hooks/queries/usePlatforms'
 import { useSendMessage } from '@/hooks/queries/useSendMessage'
 import {
   MessageFormData,
@@ -43,7 +43,7 @@ import { Textarea } from './ui/textarea'
 
 export function MessageComposer() {
   const [isScheduleDialogOpen, setIsScheduleDialogOpen] = useState(false)
-  const { data: platforms = [] } = usePlataforms()
+  const { data: platforms = [] } = usePlatforms()
   const sendMessageMutation = useSendMessage()
 
   const form = useForm<MessageFormData>({

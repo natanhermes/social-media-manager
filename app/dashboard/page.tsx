@@ -24,12 +24,12 @@ import {
   TableRow,
 } from '@/components/ui/table'
 import { useMessages } from '@/hooks/queries/useMessages'
-import { usePlataforms } from '@/hooks/queries/usePlataforms'
+import { usePlatforms } from '@/hooks/queries/usePlatforms'
 import { getStatusBadge } from '@/lib/utils'
 
 export default function DashboardPage() {
   const { data: messages = [], isLoading: isLoadingMessages } = useMessages(0)
-  const { data: plataforms = [] } = usePlataforms()
+  const { data: plataforms = [] } = usePlatforms()
 
   const stats = [
     {
