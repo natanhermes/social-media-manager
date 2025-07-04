@@ -6,7 +6,6 @@
 
 generator client {
   provider = "prisma-client-js"
-  output   = "../lib/generated/prisma"
 }
 
 datasource db {
@@ -35,8 +34,6 @@ model User {
 model Message {
   id         String   @id @default(uuid())
   content    String
-  sentAt     DateTime
-  status     MessageStatus
   platforms  MessagePlatform[]
   user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   userId     String
@@ -50,12 +47,16 @@ enum MessageStatus {
 }
 
 model Platform {
-  id        String   @id @default(uuid())
-  name      String
-  token     String?
-  connected Boolean  @default(false)
-  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  userId    String
+  id               String            @id @default(uuid())
+  name             String
+  token            String?
+  connected        Boolean           @default(false)
+  user             User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId           String
+  messagePlatforms MessagePlatform[] // Relacionamento reverso
+  lastSyncAt       DateTime?         // Última sincronização com a API
+  
+  @@unique([userId, name])  // Um usuário não pode ter 2 conexões para a mesma plataforma
 }
 
 model Settings {
@@ -69,8 +70,17 @@ model Settings {
 }
 
 model MessagePlatform {
-  id         String   @id @default(uuid())
-  message    Message @relation(fields: [messageId], references: [id], onDelete: Cascade)
-  messageId  String
-  platform   String
+  id          String        @id @default(uuid())
+  message     Message       @relation(fields: [messageId], references: [id], onDelete: Cascade)
+  messageId   String
+  platform    Platform      @relation(fields: [platformId], references: [id], onDelete: Cascade)
+  platformId  String
+  status      MessageStatus @default(pending)
+  sentAt      DateTime?     // Timestamp real do envio para esta plataforma
+  externalId  String?       // ID retornado pela API (tweet ID, post ID, etc.)
+  errorMsg    String?       // Mensagem de erro específica da plataforma
+  retryCount  Int          @default(0)  // Quantas vezes tentou reenviar
+  createdAt   DateTime     @default(now())
+  
+  @@unique([messageId, platformId])  // Uma mensagem não pode ser enviada 2x para a mesma plataforma
 }

@@ -1,7 +1,6 @@
 import { faker } from '@faker-js/faker'
+import { PrismaClient } from '@prisma/client'
 import { hash } from 'bcryptjs'
-
-import { PrismaClient } from '../lib/generated/prisma'
 
 const prisma = new PrismaClient()
 
@@ -11,6 +10,8 @@ async function main() {
   await prisma.platform.deleteMany()
   await prisma.messagePlatform.deleteMany()
   await prisma.settings.deleteMany()
+
+  const platformNames = ['Instagram', 'WhatsApp', 'Telegram']
 
   for (let i = 0; i < 10; i++) {
     const user = await prisma.user.create({
@@ -30,43 +31,65 @@ async function main() {
           },
         },
         platforms: {
-          create: [
-            {
-              name: faker.company.name(),
+          create: faker.helpers
+            .shuffle(platformNames)
+            .slice(0, faker.number.int({ min: 1, max: 3 }))
+            .map((platformName) => ({
+              name: platformName,
               token: faker.string.uuid(),
               connected: faker.datatype.boolean(),
-            },
-            {
-              name: faker.company.name(),
-              token: faker.string.uuid(),
-              connected: faker.datatype.boolean(),
-            },
-          ],
+              lastSyncAt: faker.date.recent(),
+            })),
         },
       },
+    })
+
+    // Buscar as plataformas criadas para este usuário
+    const userPlatforms = await prisma.platform.findMany({
+      where: { userId: user.id },
     })
 
     for (let j = 0; j < 5; j++) {
       const message = await prisma.message.create({
         data: {
           content: faker.lorem.paragraph(),
-          sentAt: faker.date.recent(),
-          status: faker.helpers.arrayElement(['success', 'failed', 'pending']),
           userId: user.id,
         },
       })
 
-      const userPlatforms = await prisma.platform.findMany({
-        where: { userId: user.id },
-      })
+      // Criar MessagePlatform para cada plataforma conectada do usuário
+      for (const platform of userPlatforms) {
+        if (platform.connected) {
+          const status = faker.helpers.arrayElement([
+            'success',
+            'failed',
+            'pending',
+          ])
+          const sentAt = status === 'pending' ? null : faker.date.recent()
 
-      if (userPlatforms.length > 0) {
-        await prisma.messagePlatform.create({
-          data: {
-            messageId: message.id,
-            platform: userPlatforms[0].name,
-          },
-        })
+          await prisma.messagePlatform.create({
+            data: {
+              messageId: message.id,
+              platformId: platform.id,
+              status,
+              sentAt,
+              externalId:
+                status === 'success' ? faker.string.alphanumeric(10) : null,
+              errorMsg:
+                status === 'failed'
+                  ? faker.helpers.arrayElement([
+                      'Token expirado',
+                      'Rate limit excedido',
+                      'Conteúdo não permitido',
+                      'Erro de rede',
+                      'Plataforma indisponível',
+                    ])
+                  : null,
+              retryCount:
+                status === 'failed' ? faker.number.int({ min: 0, max: 3 }) : 0,
+            },
+          })
+        }
       }
     }
   }

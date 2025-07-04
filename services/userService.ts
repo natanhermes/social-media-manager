@@ -1,7 +1,7 @@
+import { Prisma, User } from '@prisma/client'
 import { compareSync } from 'bcryptjs'
 
 import db from '@/lib/db'
-import { Prisma, User } from '@/lib/generated/prisma'
 
 export async function findUserByCredentials(
   username: string,
