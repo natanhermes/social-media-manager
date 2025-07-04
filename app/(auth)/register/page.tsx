@@ -7,10 +7,6 @@ import { redirect } from 'next/navigation'
 import { useState } from 'react'
 import { useForm } from 'react-hook-form'
 
-import {
-  RegisterFormData,
-  registerFormSchema,
-} from '@/actions/schemas/register-form-schema'
 import { Button } from '@/components/ui/button'
 import {
   Card,
@@ -22,6 +18,10 @@ import {
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { useToast } from '@/components/ui/use-toast'
+import {
+  RegisterFormData,
+  registerFormSchema,
+} from '@/schemas/register-form-schema'
 
 export default function RegisterPage() {
   const { toast } = useToast()

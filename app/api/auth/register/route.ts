@@ -1,7 +1,7 @@
 import bcrypt from 'bcryptjs'
 import { NextRequest, NextResponse } from 'next/server'
 
-import { registerFormSchema } from '@/actions/schemas/register-form-schema'
+import { registerFormSchema } from '@/schemas/register-form-schema'
 import {
   createUser,
   findUserByEmail,
