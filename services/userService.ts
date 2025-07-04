@@ -3,6 +3,8 @@ import { compareSync } from 'bcryptjs'
 
 import db from '@/lib/db'
 
+export type PublicUser = Omit<User, 'password'>
+
 export async function findUserByCredentials(
   username: string,
   password: string,
@@ -60,4 +62,38 @@ export async function createUser(user: Prisma.UserCreateInput): Promise<User> {
   })
 
   return newUser
+}
+
+export async function findUserById(id: string): Promise<PublicUser | null> {
+  const user = await db.user.findUnique({
+    where: {
+      id,
+    },
+    select: {
+      id: true,
+      name: true,
+      email: true,
+      username: true,
+      company: true,
+      bio: true,
+      createdAt: true,
+      updatedAt: true,
+    },
+  })
+
+  return user
+}
+
+export async function updateUser(
+  id: string,
+  data: Prisma.UserUpdateInput,
+): Promise<User> {
+  const updatedUser = await db.user.update({
+    where: {
+      id,
+    },
+    data,
+  })
+
+  return updatedUser
 }
