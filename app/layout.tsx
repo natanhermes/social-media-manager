@@ -1,7 +1,8 @@
 import './globals.css'
 
 import type { Metadata } from 'next'
-import { SessionProvider } from 'next-auth/react'
+
+import { Providers } from './providers'
 
 export const metadata: Metadata = {
   title: 'Social Media Manager',
@@ -16,7 +17,7 @@ export default function RootLayout({
   return (
     <html lang="pt-BR">
       <body>
-        <SessionProvider>{children}</SessionProvider>
+        <Providers>{children}</Providers>
       </body>
     </html>
   )

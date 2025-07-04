@@ -1,8 +1,6 @@
-'use client'
-
 import { LogOut, Settings, User } from 'lucide-react'
 import Form from 'next/form'
-import { useSession } from 'next-auth/react'
+import { Session } from 'next-auth'
 
 import { logoutAction } from '@/actions/logoutAction'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
@@ -16,9 +14,7 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
 
-export function DropdownMenuSidebar() {
-  const { data: session } = useSession()
-
+export function DropdownMenuSidebar({ session }: { session: Session | null }) {
   if (!session) {
     return (
       <div className="p-4">
@@ -47,9 +43,11 @@ export function DropdownMenuSidebar() {
                 {getInitials(session.user?.name || 'User')}
               </AvatarFallback>
             </Avatar>
-            <div className="text-left">
-              <p className="text-sm font-medium">{session.user?.name}</p>
-              <p className="text-xs text-muted-foreground">
+            <div className="text-left flex-1 min-w-0">
+              <p className="text-sm font-medium truncate">
+                {session.user?.name}
+              </p>
+              <p className="text-xs text-muted-foreground truncate">
                 {session.user?.email}
               </p>
             </div>
