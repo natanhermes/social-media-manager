@@ -46,9 +46,15 @@ enum MessageStatus {
   pending
 }
 
+enum PlatformName {
+  WHATSAPP
+  TELEGRAM
+  INSTAGRAM
+}
+
 model Platform {
   id               String            @id @default(uuid())
-  name             String
+  name             PlatformName
   token            String?
   connected        Boolean           @default(false)
   user             User              @relation(fields: [userId], references: [id], onDelete: Cascade)
