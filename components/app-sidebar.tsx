@@ -6,6 +6,7 @@ import {
   Menu,
   MessageSquare,
   Settings,
+  Zap,
 } from 'lucide-react'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
@@ -22,6 +23,7 @@ const navigation = [
   { name: 'Dashboard', href: '/dashboard', icon: LayoutDashboard },
   { name: 'Histórico', href: '/dashboard/history', icon: History },
   { name: 'Configurações', href: '/dashboard/settings', icon: Settings },
+  { name: 'Integrações', href: '/dashboard/integrations', icon: Zap },
 ]
 
 export function AppSidebar({

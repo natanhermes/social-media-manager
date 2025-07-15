@@ -15,18 +15,19 @@ datasource db {
 }
 
 model User {
-  id        String   @id @default(uuid())
-  name      String
-  email     String   @unique
-  username  String   @unique
-  password  String
-  company   String?
-  bio       String?
-  messages  Message[]
-  settings  Settings?
-  platforms Platform[]
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  id           String        @id @default(uuid())
+  name         String
+  email        String        @unique
+  username     String        @unique
+  password     String
+  company      String?
+  bio          String?
+  messages     Message[]
+  settings     Settings?
+  platforms    Platform[]
+  integrations Integration[] // Nova tabela de integrações
+  createdAt    DateTime      @default(now())
+  updatedAt    DateTime      @updatedAt
 
   @@unique([username, email])
 }
@@ -89,4 +90,50 @@ model MessagePlatform {
   createdAt   DateTime     @default(now())
   
   @@unique([messageId, platformId])  // Uma mensagem não pode ser enviada 2x para a mesma plataforma
+}
+
+// Modelos para sistema de integrações com Evolution API
+enum IntegrationPlatformType {
+  WHATSAPP
+  EVOLUTION
+}
+
+enum IntegrationStatus {
+  DISCONNECTED
+  CONNECTING
+  CONNECTED
+  ERROR
+  EXPIRED
+}
+
+model Integration {
+  id                      String                  @id @default(uuid())
+  platform                IntegrationPlatformType
+  name                    String
+  status                  IntegrationStatus       @default(DISCONNECTED)
+  config                  Json                    // Configurações específicas da plataforma
+  metadata                Json                    // Metadados da integração
+  user                    User                    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId                  String
+  selectedConversations   SelectedConversation[]
+  createdAt               DateTime                @default(now())
+  updatedAt               DateTime                @updatedAt
+}
+
+model SelectedConversation {
+  id                  String              @id @default(uuid())
+  externalId          String              // ID da conversa na Evolution API
+  name                String              // Nome da conversa (grupo ou contato)
+  type                ConversationType    // Tipo da conversa
+  integration         Integration         @relation(fields: [integrationId], references: [id], onDelete: Cascade)
+  integrationId       String
+  createdAt           DateTime            @default(now())
+  updatedAt           DateTime            @updatedAt
+  
+  @@unique([integrationId, externalId])
+}
+
+enum ConversationType {
+  INDIVIDUAL
+  GROUP
 }
