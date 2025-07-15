@@ -94,6 +94,8 @@ export async function POST(
       )
     }
 
+    const conversationType = type.toUpperCase() as 'GROUP' | 'INDIVIDUAL'
+
     const integration = await db.integration.findFirst({
       where: {
         id,
@@ -120,14 +122,14 @@ export async function POST(
       },
       update: {
         name,
-        type,
+        type: conversationType,
         updatedAt: new Date(),
       },
       create: {
         integrationId: id,
         externalId,
         name,
-        type,
+        type: conversationType,
       },
     })
 

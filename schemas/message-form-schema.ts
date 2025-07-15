@@ -3,9 +3,7 @@ import { z } from 'zod'
 export const messageFormSchema = z
   .object({
     message: z.string().min(1, 'Mensagem é obrigatória').trim(),
-    platforms: z
-      .array(z.string())
-      .min(1, 'Selecione pelo menos uma plataforma'),
+    platforms: z.array(z.string()).optional().default([]),
     scheduled: z.boolean().optional(),
     scheduledDate: z
       .string()

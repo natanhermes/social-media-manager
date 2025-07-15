@@ -1,28 +1,14 @@
-import { Message, MessagePlatform, Platform } from '@prisma/client'
+import { Message } from '@prisma/client'
 import { useQuery, type UseQueryResult } from '@tanstack/react-query'
 
-type PlatformData = Pick<Platform, 'id' | 'name' | 'connected'>
-
-type MessagePlatformWithData = Pick<
-  MessagePlatform,
-  | 'id'
-  | 'status'
-  | 'sentAt'
-  | 'externalId'
-  | 'errorMsg'
-  | 'retryCount'
-  | 'createdAt'
-> & {
-  platform: PlatformData
-}
-
-export type MessageWithPlatforms = Message & {
-  platforms: MessagePlatformWithData[]
-}
+export type SimpleMessage = Pick<
+  Message,
+  'id' | 'content' | 'createdAt' | 'userId'
+>
 
 export function useMessages(
   page: number,
-): UseQueryResult<MessageWithPlatforms[], Error> {
+): UseQueryResult<SimpleMessage[], Error> {
   return useQuery({
     queryKey: ['messages', page],
     queryFn: async () => {

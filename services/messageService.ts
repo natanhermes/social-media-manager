@@ -1,5 +1,21 @@
 import db from '@/lib/db'
 
+import { EvolutionWhatsAppService } from './integrations/whatsappService'
+
+interface SelectedConversationData {
+  id: string
+  externalId: string
+  name: string
+  type: string
+}
+
+interface IntegrationWithConversations {
+  id: string
+  userId: string
+  config: Record<string, unknown>
+  selectedConversations: SelectedConversationData[]
+}
+
 export interface CreateMessageData {
   content: string
   platforms: string[]
@@ -20,7 +36,7 @@ export interface SendMessageResponse {
   message: string
   data?: {
     messageId: string
-    platforms: string[]
+    platforms?: string[]
     scheduledFor?: Date
   }
   errors?: {
@@ -34,26 +50,11 @@ export async function listMessages(userId: string, page: number) {
     where: {
       userId,
     },
-    include: {
-      platforms: {
-        select: {
-          id: true,
-          status: true,
-          sentAt: true,
-          externalId: true,
-          errorMsg: true,
-          retryCount: true,
-          createdAt: true,
-          platform: {
-            select: {
-              id: true,
-              name: true,
-              connected: true,
-            },
-          },
-        },
-        orderBy: { createdAt: 'asc' },
-      },
+    select: {
+      id: true,
+      content: true,
+      createdAt: true,
+      userId: true,
     },
     orderBy: { createdAt: 'desc' },
     take: 20,
@@ -68,21 +69,43 @@ export async function sendMessage(
   payload: SendMessagePayload,
 ): Promise<SendMessageResponse> {
   try {
-    // Validar se as plataformas estão conectadas
-    const platforms = await db.platform.findMany({
+    // Primeiro verificar se existem integrações conectadas
+    const connectedIntegrations = await db.integration.findMany({
       where: {
         userId,
-        id: {
-          in: payload.platforms,
-        },
-        connected: true,
-      },
-      select: {
-        id: true,
-        name: true,
-        connected: true,
+        status: 'CONNECTED',
       },
     })
+
+    if (connectedIntegrations.length === 0) {
+      return {
+        success: false,
+        message:
+          'Nenhuma integração do WhatsApp conectada encontrada. Conecte uma integração primeiro.',
+      }
+    }
+
+    // Buscar integrações conectadas que tenham grupos selecionados
+    const integrations = await db.integration.findMany({
+      where: {
+        userId,
+        status: 'CONNECTED',
+        selectedConversations: {
+          some: {},
+        },
+      },
+      include: {
+        selectedConversations: true,
+      },
+    })
+
+    if (integrations.length === 0) {
+      return {
+        success: false,
+        message:
+          'Você possui integrações conectadas, mas nenhum grupo foi selecionado para envio. Selecione pelo menos um grupo nas suas integrações.',
+      }
+    }
 
     // Processar agendamento se necessário
     let scheduledFor: Date | undefined
@@ -105,59 +128,27 @@ export async function sendMessage(
       data: {
         content: payload.message,
         userId,
-        platforms: {
-          create: payload.platforms.map((platformId) => ({
-            platformId,
-            status: payload.scheduled ? 'pending' : 'pending',
-          })),
-        },
-      },
-      include: {
-        platforms: {
-          include: {
-            platform: {
-              select: {
-                id: true,
-                name: true,
-              },
-            },
-          },
-        },
       },
     })
 
-    // Simular envio para cada plataforma (aqui seria a lógica real de envio)
-    const sendResults = await Promise.allSettled(
-      platforms.map((platform) =>
-        simulatePlatformSend(platform, payload.message),
-      ),
-    )
-
-    const errors: { platform: string; error: string }[] = []
-
-    sendResults.forEach((result, index) => {
-      if (result.status === 'rejected') {
-        errors.push({
-          platform: platforms[index].name,
-          error: result.reason || 'Erro desconhecido',
-        })
-      }
-    })
+    // Implementar envio para as integrações conectadas
+    try {
+      await sendToConnectedIntegrations(
+        integrations as IntegrationWithConversations[],
+        payload.message,
+      )
+    } catch (sendError) {
+      console.error('Erro durante envio para integrações:', sendError)
+      // Não interromper o fluxo, pois a mensagem já foi criada
+    }
 
     return {
-      success: errors.length === 0,
-      message:
-        errors.length > 0
-          ? `Mensagem enviada com alguns erros`
-          : payload.scheduled
-            ? 'Mensagem agendada com sucesso'
-            : 'Mensagem enviada com sucesso',
+      success: true,
+      message: 'Mensagem enviada com sucesso',
       data: {
         messageId: message.id,
-        platforms: message.platforms.map((mp) => mp.platform.name),
         scheduledFor,
       },
-      errors: errors.length > 0 ? errors : undefined,
     }
   } catch (error) {
     console.error('Erro ao enviar mensagem:', error)
@@ -168,15 +159,72 @@ export async function sendMessage(
   }
 }
 
-async function simulatePlatformSend(
-  platform: { id: string; name: string; connected: boolean },
-  message: string,
+async function sendToConnectedIntegrations(
+  integrations: IntegrationWithConversations[],
+  messageContent: string,
 ): Promise<void> {
-  await new Promise((resolve) => setTimeout(resolve, Math.random() * 1000))
-
-  if (Math.random() < 0.1) {
-    throw new Error(`Falha no envio para ${platform.name}`)
+  // Verificar se as variáveis de ambiente estão definidas
+  if (!process.env.EVOLUTION_API_URL || !process.env.EVOLUTION_API_KEY) {
+    console.error(
+      'Variáveis de ambiente EVOLUTION_API_URL ou EVOLUTION_API_KEY não estão definidas',
+    )
+    return
   }
 
-  console.log(`Mensagem enviada para ${platform.name}: ${message}`)
+  const whatsappService = new EvolutionWhatsAppService(
+    process.env.EVOLUTION_API_URL,
+    process.env.EVOLUTION_API_KEY,
+  )
+
+  const sendPromises = integrations.map(async (integration) => {
+    try {
+      const config = integration.config as Record<string, unknown>
+      const instanceName = config?.instanceName as string
+
+      if (!instanceName) {
+        console.error(
+          'Instance name não encontrado para integração:',
+          integration.id,
+        )
+        return
+      }
+
+      // Enviar mensagem para cada grupo selecionado
+      const groupSendPromises = integration.selectedConversations.map(
+        async (conversation: SelectedConversationData) => {
+          try {
+            const sendResult = await whatsappService.sendMessage(instanceName, {
+              conversationId: conversation.externalId,
+              content: messageContent,
+            })
+
+            if (sendResult.success) {
+              console.log(
+                `Mensagem enviada para grupo ${conversation.name} (${conversation.externalId})`,
+              )
+            } else {
+              console.error(
+                `Erro ao enviar para grupo ${conversation.name}:`,
+                sendResult.error,
+              )
+            }
+          } catch (error) {
+            console.error(
+              `Erro ao enviar mensagem para grupo ${conversation.name}:`,
+              error,
+            )
+          }
+        },
+      )
+
+      await Promise.allSettled(groupSendPromises)
+    } catch (integrationError) {
+      console.error(
+        `Erro geral na integração ${integration.id}:`,
+        integrationError,
+      )
+    }
+  })
+
+  await Promise.allSettled(sendPromises)
 }

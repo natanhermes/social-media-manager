@@ -4,13 +4,15 @@ import { zodResolver } from '@hookform/resolvers/zod'
 import { Calendar, Send } from 'lucide-react'
 import { useState } from 'react'
 import { useForm } from 'react-hook-form'
+import { toast } from 'sonner'
 
-import { usePlatforms } from '@/hooks/queries/usePlatforms'
+import { useIntegrations } from '@/hooks/queries/useIntegrations'
 import { useSendMessage } from '@/hooks/queries/useSendMessage'
 import {
   MessageFormData,
   messageFormSchema,
 } from '@/schemas/message-form-schema'
+import { EvolutionIntegration } from '@/types/integrations'
 
 import { Button } from './ui/button'
 import {
@@ -20,7 +22,6 @@ import {
   CardHeader,
   CardTitle,
 } from './ui/card'
-import { Checkbox } from './ui/checkbox'
 import {
   Dialog,
   DialogContent,
@@ -43,14 +44,13 @@ import { Textarea } from './ui/textarea'
 
 export function MessageComposer() {
   const [isScheduleDialogOpen, setIsScheduleDialogOpen] = useState(false)
-  const { data: platforms = [] } = usePlatforms()
+  const { data: integrations } = useIntegrations()
   const sendMessageMutation = useSendMessage()
 
   const form = useForm<MessageFormData>({
     resolver: zodResolver(messageFormSchema),
     defaultValues: {
       message: '',
-      platforms: [],
       scheduled: false,
       scheduledDate: '',
       scheduledTime: '',
@@ -59,15 +59,37 @@ export function MessageComposer() {
 
   const handleSubmit = async (data: MessageFormData) => {
     try {
-      await sendMessageMutation.mutateAsync(data)
+      const response = await sendMessageMutation.mutateAsync(data)
 
-      form.reset()
-      setIsScheduleDialogOpen(false)
+      if (response.success) {
+        toast.success('Mensagem enviada com sucesso!', {
+          description: response.message,
+        })
 
-      console.log('Mensagem enviada com sucesso!')
+        form.reset()
+        setIsScheduleDialogOpen(false)
+      } else {
+        toast.error('Erro ao enviar mensagem', {
+          description: response.message,
+        })
+      }
+
+      if (response.errors && response.errors.length > 0) {
+        response.errors.forEach((error) => {
+          toast.error(`Erro na plataforma ${error.platform}`, {
+            description: error.error,
+          })
+        })
+      }
     } catch (error) {
-      console.error('Erro ao enviar mensagem:', error)
-      // TODO: Adicionar toast de erro
+      const errorMessage =
+        error instanceof Error
+          ? error.message
+          : 'Erro desconhecido ao enviar mensagem'
+
+      toast.error('Erro ao enviar mensagem', {
+        description: errorMessage,
+      })
     }
   }
 
@@ -85,7 +107,10 @@ export function MessageComposer() {
     form.handleSubmit(handleSubmit)()
   }
 
-  const connectedPlatforms = platforms.filter((platform) => platform.connected)
+  const connectedIntegrations = (integrations?.data || []).filter(
+    (integration: EvolutionIntegration) => integration.status === 'CONNECTED',
+  )
+
   const isLoading = sendMessageMutation.isPending
 
   return (
@@ -117,44 +142,33 @@ export function MessageComposer() {
               )}
             />
 
-            <FormField
-              control={form.control}
-              name="platforms"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Plataformas</FormLabel>
-                  <div className="flex gap-4 mt-2">
-                    {connectedPlatforms.map((platform) => (
-                      <FormItem
-                        key={platform.id}
-                        className="flex items-center space-x-2"
-                      >
-                        <FormControl>
-                          <Checkbox
-                            checked={field.value.includes(platform.id)}
-                            onCheckedChange={(checked) => {
-                              if (checked) {
-                                field.onChange([...field.value, platform.id])
-                              } else {
-                                field.onChange(
-                                  field.value.filter(
-                                    (id) => id !== platform.id,
-                                  ),
-                                )
-                              }
-                            }}
-                          />
-                        </FormControl>
-                        <FormLabel className="text-sm font-normal cursor-pointer">
-                          {platform.name}
-                        </FormLabel>
-                      </FormItem>
-                    ))}
-                  </div>
-                  <FormMessage />
-                </FormItem>
+            <div className="rounded-lg border p-4 bg-muted/50">
+              <h4 className="text-sm font-medium mb-2">
+                Integrações Conectadas
+              </h4>
+              {connectedIntegrations.length > 0 ? (
+                <div className="space-y-2">
+                  {connectedIntegrations.map((integration) => (
+                    <div
+                      key={integration.id}
+                      className="flex items-center space-x-2 text-sm"
+                    >
+                      <div className="h-2 w-2 bg-green-500 rounded-full"></div>
+                      <span>{integration.name}</span>
+                    </div>
+                  ))}
+                  <p className="text-xs text-muted-foreground mt-2">
+                    A mensagem será enviada para os grupos selecionados em todas
+                    as integrações conectadas.
+                  </p>
+                </div>
+              ) : (
+                <p className="text-sm text-muted-foreground">
+                  Nenhuma integração conectada. Configure uma integração do
+                  WhatsApp primeiro.
+                </p>
               )}
-            />
+            </div>
 
             <div className="flex gap-4">
               <Button

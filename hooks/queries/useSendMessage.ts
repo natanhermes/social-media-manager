@@ -18,8 +18,18 @@ export function useSendMessage() {
 
       const result = await response.json()
 
+      // Verificar status HTTP primeiro
       if (!response.ok) {
-        throw new Error(result.error || 'Erro ao enviar mensagem')
+        throw new Error(
+          result.error || result.message || 'Erro ao enviar mensagem',
+        )
+      }
+
+      // Verificar se o resultado indica falha mesmo com status 200
+      if (result.success === false) {
+        throw new Error(
+          result.message || result.error || 'Falha no envio da mensagem',
+        )
       }
 
       return result

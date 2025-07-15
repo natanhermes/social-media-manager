@@ -41,8 +41,6 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json(result)
   } catch (error) {
-    console.error('Erro na rota de envio:', error)
-
     if (error instanceof Error && error.name === 'ZodError') {
       return NextResponse.json(
         {

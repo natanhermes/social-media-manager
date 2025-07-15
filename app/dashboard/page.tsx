@@ -23,13 +23,16 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table'
+import { useIntegrations } from '@/hooks/queries/useIntegrations'
 import { useMessages } from '@/hooks/queries/useMessages'
-import { usePlatforms } from '@/hooks/queries/usePlatforms'
-import { getStatusBadge } from '@/lib/utils'
 
 export default function DashboardPage() {
   const { data: messages = [], isLoading: isLoadingMessages } = useMessages(0)
-  const { data: plataforms = [] } = usePlatforms()
+  const { data: integrations } = useIntegrations()
+
+  const connectedIntegrations = (integrations?.data || []).filter(
+    (integration) => integration.status === 'CONNECTED',
+  )
 
   const stats = [
     {
@@ -39,19 +42,14 @@ export default function DashboardPage() {
       color: 'text-blue-600',
     },
     {
-      title: 'Plataformas Ativas',
-      value: plataforms.filter((p) => p.connected).length,
+      title: 'Integrações Ativas',
+      value: connectedIntegrations.length,
       icon: Users,
       color: 'text-green-600',
     },
     {
-      title: 'Agendadas',
-      value: messages.reduce((acc, msg) => {
-        const pendingPlatforms = msg.platforms.filter(
-          (p) => p.status === 'pending',
-        )
-        return acc + pendingPlatforms.length
-      }, 0),
+      title: 'Última Mensagem',
+      value: messages.length > 0 ? 'Hoje' : 'Nenhuma',
       icon: Clock,
       color: 'text-yellow-600',
     },
@@ -110,13 +108,23 @@ export default function DashboardPage() {
                 <Skeleton key={i} className="h-12 w-full" />
               ))}
             </div>
+          ) : messages.length === 0 ? (
+            <div className="text-center py-8">
+              <MessageSquare className="h-12 w-12 text-gray-400 mx-auto mb-4" />
+              <h3 className="text-lg font-medium text-gray-900 mb-2">
+                Nenhuma mensagem enviada
+              </h3>
+              <p className="text-gray-600">
+                Envie sua primeira mensagem usando o formulário acima.
+              </p>
+            </div>
           ) : (
             <Table>
               <TableHeader>
                 <TableRow>
                   <TableHead>Mensagem</TableHead>
-                  <TableHead>Plataformas</TableHead>
                   <TableHead>Data de Envio</TableHead>
+                  <TableHead>Integrações</TableHead>
                   <TableHead>Status</TableHead>
                   <TableHead>Ações</TableHead>
                 </TableRow>
@@ -128,45 +136,25 @@ export default function DashboardPage() {
                       {msg.content}
                     </TableCell>
                     <TableCell>
+                      {new Date(msg.createdAt).toLocaleString('pt-BR')}
+                    </TableCell>
+                    <TableCell>
                       <div className="flex gap-1">
-                        {msg.platforms.map((platform) => (
+                        {connectedIntegrations.map((integration) => (
                           <Badge
-                            key={platform.id}
+                            key={integration.id}
                             variant="outline"
-                            className={
-                              platform.platform.connected
-                                ? 'bg-green-50'
-                                : 'bg-gray-50'
-                            }
+                            className="bg-green-50"
                           >
-                            {platform.platform.name}
+                            {integration.name}
                           </Badge>
                         ))}
                       </div>
                     </TableCell>
                     <TableCell>
-                      {msg.platforms.some((p) => p.sentAt)
-                        ? new Date(msg.platforms[0].sentAt!).toLocaleString(
-                            'pt-BR',
-                          )
-                        : 'Não enviado'}
-                    </TableCell>
-                    <TableCell>
-                      <div className="flex gap-1">
-                        {msg.platforms.map((platform) => (
-                          <div
-                            key={platform.id}
-                            className="flex items-center gap-1"
-                          >
-                            <Badge
-                              variant={getStatusBadge(platform.status)?.variant}
-                              className={getStatusBadge(platform.status)?.color}
-                            >
-                              {getStatusBadge(platform.status)?.label}
-                            </Badge>
-                          </div>
-                        ))}
-                      </div>
+                      <Badge variant="default" className="bg-green-500">
+                        Enviada
+                      </Badge>
                     </TableCell>
                     <TableCell>
                       <Button variant="ghost" size="sm">
@@ -181,11 +169,13 @@ export default function DashboardPage() {
         </CardContent>
       </Card>
 
-      <MessageDetailsModal
-        message={messages[0]}
-        open={false}
-        onOpenChange={() => {}}
-      />
+      {messages.length > 0 && (
+        <MessageDetailsModal
+          message={messages[0]}
+          open={false}
+          onOpenChange={() => {}}
+        />
+      )}
     </div>
   )
 }
