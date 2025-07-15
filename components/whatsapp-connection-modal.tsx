@@ -113,7 +113,13 @@ export function WhatsAppConnectionModal({
     }
   }
 
-  const handleClose = () => {
+  const handleClose = async () => {
+    if (testResult?.instanceName) {
+      await fetch(`/api/integrations/instance/${testResult.instanceName}`, {
+        method: 'DELETE',
+      })
+    }
+
     setOpen((prev) => !prev)
     setStep('form')
   }

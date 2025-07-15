@@ -60,7 +60,7 @@ export class EvolutionWhatsAppService {
   private apiKey: string
 
   constructor(baseUrl: string, apiKey: string) {
-    this.baseUrl = baseUrl.replace(/\/$/, '') // Remove trailing slash
+    this.baseUrl = baseUrl.replace(/\/$/, '')
     this.apiKey = apiKey
   }
 
@@ -127,7 +127,7 @@ export class EvolutionWhatsAppService {
       const data = await response.json()
       return {
         success: true,
-        ...data,
+        instance: data,
       }
     } catch (error) {
       return {
@@ -374,6 +374,27 @@ export class EvolutionWhatsAppService {
         success: false,
         error: `Failed to get connection status: ${error instanceof Error ? error.message : 'Unknown error'}`,
       }
+    }
+  }
+
+  async deleteInstance(instanceName: string): Promise<boolean> {
+    try {
+      const response = await fetch(
+        `${this.baseUrl}/instance/delete/${instanceName}`,
+        {
+          headers: this.getHeaders(),
+          method: 'DELETE',
+        },
+      )
+
+      if (!response.ok) {
+        return false
+      } else {
+        return true
+      }
+    } catch (error) {
+      console.error('Error deleting instance:', error)
+      return false
     }
   }
 }

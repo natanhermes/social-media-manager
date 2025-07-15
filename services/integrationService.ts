@@ -6,7 +6,6 @@ import {
 } from '@prisma/client'
 
 import db from '@/lib/db'
-import { ConversationChannel } from '@/types/integrations'
 
 export async function getUserIntegrations(
   userId: string,
@@ -94,24 +93,4 @@ export async function deleteIntegration(
     console.error('Error deleting integration:', error)
     return false
   }
-}
-
-export async function getIntegrationConversations(
-  integrationId: string,
-  userId: string,
-): Promise<ConversationChannel[]> {
-  const integration = await db.integration.findFirst({
-    where: {
-      id: integrationId,
-      userId,
-    },
-  })
-
-  if (!integration) {
-    return []
-  }
-
-  // As conversas são buscadas diretamente da Evolution API
-  // Esta função pode ser removida se não for necessária
-  return []
 }

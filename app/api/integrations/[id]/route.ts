@@ -1,6 +1,8 @@
+import { Integration } from '@prisma/client'
 import { NextRequest, NextResponse } from 'next/server'
 
 import { getAuthUser } from '@/lib/auth'
+import { EvolutionWhatsAppService } from '@/services/integrations/whatsappService'
 import {
   deleteIntegration,
   getIntegrationById,
@@ -8,7 +10,7 @@ import {
 } from '@/services/integrationService'
 
 export async function GET(
-  request: NextRequest,
+  _: NextRequest,
   { params }: { params: { id: string } },
 ) {
   try {
@@ -104,11 +106,12 @@ export async function PATCH(
 }
 
 export async function DELETE(
-  request: NextRequest,
-  { params }: { params: { id: string } },
+  _: NextRequest,
+  { params }: { params: Promise<{ id: string }> },
 ) {
   try {
     const user = await getAuthUser()
+    const { id } = await params
     if (!user?.user?.id) {
       return NextResponse.json(
         {
@@ -119,7 +122,43 @@ export async function DELETE(
       )
     }
 
-    const success = await deleteIntegration(params.id, user.user.id)
+    const integration = (await getIntegrationById(
+      id,
+      user.user.id,
+    )) as Integration & {
+      config: {
+        instanceName: string
+      }
+    }
+
+    if (!integration) {
+      return NextResponse.json(
+        {
+          success: false,
+          error: 'Integration not found',
+        },
+        { status: 404 },
+      )
+    }
+
+    const instanceName = integration.config?.instanceName
+
+    if (!instanceName) {
+      return NextResponse.json(
+        {
+          success: false,
+          error: 'Instance Name not found',
+        },
+        { status: 404 },
+      )
+    }
+
+    const whatsappService = new EvolutionWhatsAppService(
+      process.env.EVOLUTION_API_URL!,
+      process.env.EVOLUTION_API_KEY!,
+    )
+
+    const success = await whatsappService.deleteInstance(instanceName)
 
     if (!success) {
       return NextResponse.json(
@@ -130,6 +169,8 @@ export async function DELETE(
         { status: 500 },
       )
     }
+
+    await deleteIntegration(id, user.user.id)
 
     return NextResponse.json({
       success: true,
