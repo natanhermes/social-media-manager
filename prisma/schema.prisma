@@ -96,6 +96,7 @@ model MessagePlatform {
 enum IntegrationPlatformType {
   WHATSAPP
   EVOLUTION
+  TELEGRAM
 }
 
 enum IntegrationStatus {

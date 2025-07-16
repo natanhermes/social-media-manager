@@ -1,6 +1,7 @@
 'use client'
 
 import { Clock, MessageSquare, Users } from 'lucide-react'
+import { useState } from 'react'
 
 import { MessageComposer } from '@/components/message-composer'
 import { MessageDetailsModal } from '@/components/message-details-modal'
@@ -24,11 +25,15 @@ import {
   TableRow,
 } from '@/components/ui/table'
 import { useIntegrations } from '@/hooks/queries/useIntegrations'
-import { useMessages } from '@/hooks/queries/useMessages'
+import { SimpleMessage, useMessages } from '@/hooks/queries/useMessages'
 
 export default function DashboardPage() {
   const { data: messages = [], isLoading: isLoadingMessages } = useMessages(0)
   const { data: integrations } = useIntegrations()
+  const [selectedMessage, setSelectedMessage] = useState<SimpleMessage | null>(
+    null,
+  )
+  const [isModalOpen, setIsModalOpen] = useState(false)
 
   const connectedIntegrations = (integrations?.data || []).filter(
     (integration) => integration.status === 'CONNECTED',
@@ -54,6 +59,11 @@ export default function DashboardPage() {
       color: 'text-yellow-600',
     },
   ]
+
+  const handleViewMessage = (message: SimpleMessage) => {
+    setSelectedMessage(message)
+    setIsModalOpen(true)
+  }
 
   return (
     <div className="p-6 space-y-6">
@@ -94,7 +104,7 @@ export default function DashboardPage() {
       <MessageComposer />
 
       {/* Messages Table */}
-      <Card>
+      <Card className="max-h-[500px] overflow-y-auto">
         <CardHeader>
           <CardTitle>Mensagens Recentes</CardTitle>
           <CardDescription>
@@ -157,7 +167,11 @@ export default function DashboardPage() {
                       </Badge>
                     </TableCell>
                     <TableCell>
-                      <Button variant="ghost" size="sm">
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => handleViewMessage(msg)}
+                      >
                         Detalhes
                       </Button>
                     </TableCell>
@@ -169,13 +183,12 @@ export default function DashboardPage() {
         </CardContent>
       </Card>
 
-      {messages.length > 0 && (
-        <MessageDetailsModal
-          message={messages[0]}
-          open={false}
-          onOpenChange={() => {}}
-        />
-      )}
+      {/* Message Details Modal */}
+      <MessageDetailsModal
+        message={selectedMessage}
+        open={isModalOpen}
+        onOpenChange={setIsModalOpen}
+      />
     </div>
   )
 }

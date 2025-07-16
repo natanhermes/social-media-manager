@@ -3,6 +3,7 @@ import { IntegrationsFormData } from '@/schemas/integrations-form-schema'
 export enum IntegrationPlatform {
   WHATSAPP = 'WHATSAPP',
   EVOLUTION = 'EVOLUTION',
+  TELEGRAM = 'TELEGRAM',
 }
 
 export enum IntegrationStatus {
@@ -19,7 +20,7 @@ export interface BaseIntegration {
   name: string
   status: IntegrationStatus
   userId: string
-  config: IntegrationsFormData
+  config: Record<string, unknown>
   metadata: Record<string, unknown>
   createdAt: Date
   updatedAt: Date
@@ -38,7 +39,23 @@ export interface EvolutionIntegration extends BaseIntegration {
   }
 }
 
-export type Integration = EvolutionIntegration
+export interface TelegramIntegration extends BaseIntegration {
+  platform: IntegrationPlatform.TELEGRAM
+  config: {
+    botToken: string
+    botId: string
+  }
+  metadata: {
+    botId: number
+    botUsername: string
+    botFirstName: string
+    canJoinGroups: boolean
+    canReadAllGroupMessages: boolean
+    supportsInlineQueries: boolean
+  }
+}
+
+export type Integration = EvolutionIntegration | TelegramIntegration
 
 export interface ConversationChannel {
   id: string

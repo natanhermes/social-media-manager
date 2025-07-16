@@ -2,6 +2,7 @@ import { IntegrationPlatformType } from '@prisma/client'
 import { NextRequest, NextResponse } from 'next/server'
 
 import { getAuthUser } from '@/lib/auth'
+import { TelegramBotService } from '@/services/integrations/telegramService'
 import { EvolutionWhatsAppService } from '@/services/integrations/whatsappService'
 import {
   createIntegration,
@@ -66,15 +67,39 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    const evolutionService = new EvolutionWhatsAppService(
-      process.env.EVOLUTION_API_URL!,
-      process.env.EVOLUTION_API_KEY!,
-    )
+    // Detectar plataforma baseado na configuração
+    let result
+    let platformType: IntegrationPlatformType
 
-    const result = await evolutionService.connectEvolution({
-      config,
-      testConnection,
-    })
+    if (config.botToken) {
+      // Telegram Bot
+      const telegramService = new TelegramBotService(config.botToken)
+      result = await telegramService.connectTelegram({
+        config,
+        testConnection,
+      })
+      platformType = IntegrationPlatformType.TELEGRAM
+    } else if (config.instanceName) {
+      // WhatsApp Evolution
+      const evolutionService = new EvolutionWhatsAppService(
+        process.env.EVOLUTION_API_URL!,
+        process.env.EVOLUTION_API_KEY!,
+      )
+      result = await evolutionService.connectEvolution({
+        config,
+        testConnection,
+      })
+      platformType = IntegrationPlatformType.EVOLUTION
+    } else {
+      return NextResponse.json(
+        {
+          success: false,
+          error:
+            'Configuração inválida. Forneça instanceName para WhatsApp ou botToken para Telegram.',
+        },
+        { status: 400 },
+      )
+    }
 
     if (!result.success) {
       return NextResponse.json(
@@ -97,7 +122,7 @@ export async function POST(request: NextRequest) {
 
     const integration = await createIntegration(
       user.user.id,
-      IntegrationPlatformType.EVOLUTION,
+      platformType,
       result.integration!.name,
       result.integration!.config,
       result.integration!.metadata,

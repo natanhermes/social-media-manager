@@ -1,10 +1,8 @@
-import { Integration } from '@prisma/client'
 import { NextRequest, NextResponse } from 'next/server'
 
 import { getAuthUser } from '@/lib/auth'
-import { EvolutionWhatsAppService } from '@/services/integrations/whatsappService'
 import {
-  deleteIntegration,
+  deleteIntegrationWithCleanup,
   getIntegrationById,
   updateIntegrationStatus,
 } from '@/services/integrationService'
@@ -122,55 +120,17 @@ export async function DELETE(
       )
     }
 
-    const integration = (await getIntegrationById(
-      id,
-      user.user.id,
-    )) as Integration & {
-      config: {
-        instanceName: string
-      }
-    }
+    const result = await deleteIntegrationWithCleanup(id, user.user.id)
 
-    if (!integration) {
+    if (!result.success) {
       return NextResponse.json(
         {
           success: false,
-          error: 'Integration not found',
-        },
-        { status: 404 },
-      )
-    }
-
-    const instanceName = integration.config?.instanceName
-
-    if (!instanceName) {
-      return NextResponse.json(
-        {
-          success: false,
-          error: 'Instance Name not found',
-        },
-        { status: 404 },
-      )
-    }
-
-    const whatsappService = new EvolutionWhatsAppService(
-      process.env.EVOLUTION_API_URL!,
-      process.env.EVOLUTION_API_KEY!,
-    )
-
-    const success = await whatsappService.deleteInstance(instanceName)
-
-    if (!success) {
-      return NextResponse.json(
-        {
-          success: false,
-          error: 'Failed to delete integration',
+          error: result.error,
         },
         { status: 500 },
       )
     }
-
-    await deleteIntegration(id, user.user.id)
 
     return NextResponse.json({
       success: true,

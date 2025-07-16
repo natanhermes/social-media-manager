@@ -1,5 +1,6 @@
 import db from '@/lib/db'
 
+import { TelegramBotService } from './integrations/telegramService'
 import { EvolutionWhatsAppService } from './integrations/whatsappService'
 
 interface SelectedConversationData {
@@ -163,61 +164,101 @@ async function sendToConnectedIntegrations(
   integrations: IntegrationWithConversations[],
   messageContent: string,
 ): Promise<void> {
-  // Verificar se as variáveis de ambiente estão definidas
-  if (!process.env.EVOLUTION_API_URL || !process.env.EVOLUTION_API_KEY) {
-    console.error(
-      'Variáveis de ambiente EVOLUTION_API_URL ou EVOLUTION_API_KEY não estão definidas',
-    )
-    return
-  }
-
-  const whatsappService = new EvolutionWhatsAppService(
-    process.env.EVOLUTION_API_URL,
-    process.env.EVOLUTION_API_KEY,
-  )
-
   const sendPromises = integrations.map(async (integration) => {
     try {
       const config = integration.config as Record<string, unknown>
-      const instanceName = config?.instanceName as string
 
-      if (!instanceName) {
-        console.error(
-          'Instance name não encontrado para integração:',
-          integration.id,
+      // Detectar o tipo de integração baseado na configuração
+      if (config?.instanceName) {
+        // WhatsApp Evolution
+        if (!process.env.EVOLUTION_API_URL || !process.env.EVOLUTION_API_KEY) {
+          console.error(
+            'Variáveis de ambiente EVOLUTION_API_URL ou EVOLUTION_API_KEY não estão definidas para WhatsApp',
+          )
+          return
+        }
+
+        const whatsappService = new EvolutionWhatsAppService(
+          process.env.EVOLUTION_API_URL,
+          process.env.EVOLUTION_API_KEY,
         )
-        return
-      }
 
-      // Enviar mensagem para cada grupo selecionado
-      const groupSendPromises = integration.selectedConversations.map(
-        async (conversation: SelectedConversationData) => {
-          try {
-            const sendResult = await whatsappService.sendMessage(instanceName, {
-              conversationId: conversation.externalId,
-              content: messageContent,
-            })
+        const instanceName = config.instanceName as string
 
-            if (sendResult.success) {
-              console.log(
-                `Mensagem enviada para grupo ${conversation.name} (${conversation.externalId})`,
+        // Enviar mensagem para cada grupo selecionado
+        const groupSendPromises = integration.selectedConversations.map(
+          async (conversation: SelectedConversationData) => {
+            try {
+              const sendResult = await whatsappService.sendMessage(
+                instanceName,
+                {
+                  conversationId: conversation.externalId,
+                  content: messageContent,
+                },
               )
-            } else {
+
+              if (sendResult.success) {
+                console.log(
+                  `WhatsApp: Mensagem enviada para grupo ${conversation.name} (${conversation.externalId})`,
+                )
+              } else {
+                console.error(
+                  `WhatsApp: Erro ao enviar para grupo ${conversation.name}:`,
+                  sendResult.error,
+                )
+              }
+            } catch (error) {
               console.error(
-                `Erro ao enviar para grupo ${conversation.name}:`,
-                sendResult.error,
+                `WhatsApp: Erro ao enviar mensagem para grupo ${conversation.name}:`,
+                error,
               )
             }
-          } catch (error) {
-            console.error(
-              `Erro ao enviar mensagem para grupo ${conversation.name}:`,
-              error,
-            )
-          }
-        },
-      )
+          },
+        )
 
-      await Promise.allSettled(groupSendPromises)
+        await Promise.allSettled(groupSendPromises)
+      } else if (config?.botToken) {
+        // Telegram Bot
+        const telegramService = new TelegramBotService(
+          config.botToken as string,
+        )
+
+        // Enviar mensagem para cada grupo selecionado
+        const groupSendPromises = integration.selectedConversations.map(
+          async (conversation: SelectedConversationData) => {
+            try {
+              const sendResult = await telegramService.sendMessage({
+                conversationId: conversation.externalId,
+                content: messageContent,
+              })
+
+              if (sendResult.success) {
+                console.log(
+                  `Telegram: Mensagem enviada para grupo ${conversation.name} (${conversation.externalId})`,
+                )
+              } else {
+                console.error(
+                  `Telegram: Erro ao enviar para grupo ${conversation.name}:`,
+                  sendResult.error,
+                )
+              }
+            } catch (error) {
+              console.error(
+                `Telegram: Erro ao enviar mensagem para grupo ${conversation.name}:`,
+                error,
+              )
+            }
+          },
+        )
+
+        await Promise.allSettled(groupSendPromises)
+      } else {
+        console.error(
+          'Configuração inválida para integração:',
+          integration.id,
+          'Necessário instanceName (WhatsApp) ou botToken (Telegram)',
+        )
+      }
     } catch (integrationError) {
       console.error(
         `Erro geral na integração ${integration.id}:`,

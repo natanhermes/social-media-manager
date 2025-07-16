@@ -1,7 +1,7 @@
 'use client'
 
 import { Integration, IntegrationStatus } from '@prisma/client'
-import { AlertCircle, MessageCircle, Settings, Trash2 } from 'lucide-react'
+import { AlertCircle, Bot, MessageCircle, Settings, Trash2 } from 'lucide-react'
 import { toast } from 'sonner'
 
 import {
@@ -9,6 +9,7 @@ import {
   useIntegrations,
 } from '@/hooks/queries/useIntegrations'
 
+import { TelegramConnectionModal } from './telegram-connection-modal'
 import { Badge } from './ui/badge'
 import { Button } from './ui/button'
 import {
@@ -60,7 +61,10 @@ const getStatusText = (status: IntegrationStatus) => {
 const getPlatformIcon = (platform: string) => {
   switch (platform) {
     case 'WHATSAPP':
+    case 'EVOLUTION':
       return <MessageCircle className="h-4 w-4 text-green-600" />
+    case 'TELEGRAM':
+      return <Bot className="h-4 w-4 text-blue-600" />
     default:
       return <MessageCircle className="h-4 w-4" />
   }
@@ -135,7 +139,16 @@ export function IntegrationsList({
 
   return (
     <div className="space-y-4">
-      <div className="flex items-center justify-end">
+      <div className="flex items-center justify-end gap-2">
+        <TelegramConnectionModal
+          trigger={
+            <Button variant="outline">
+              <Bot className="mr-2 h-4 w-4" />
+              Conectar Telegram
+            </Button>
+          }
+          onSuccess={() => {}}
+        />
         <WhatsAppConnectionModal
           trigger={
             <Button>
