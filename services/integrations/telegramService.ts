@@ -44,6 +44,14 @@ interface TelegramChat {
   has_hidden_members?: boolean
 }
 
+interface TelegramMessage {
+  message_id: number
+  from: TelegramBotInfo
+  chat: TelegramChat
+  date: number
+  text: string
+}
+
 interface TelegramUpdate {
   update_id: number
   message?: {
@@ -60,15 +68,15 @@ interface TelegramUpdate {
     date: number
     text?: string
   }
-  edited_message?: any
-  channel_post?: any
-  edited_channel_post?: any
-  inline_query?: any
-  chosen_inline_result?: any
-  callback_query?: any
+  edited_message?: TelegramMessage
+  channel_post?: TelegramMessage
+  edited_channel_post?: TelegramMessage
+  inline_query?: string
+  chosen_inline_result?: string
+  callback_query?: string
 }
 
-interface TelegramApiResponse<T = any> {
+interface TelegramApiResponse<T = unknown> {
   ok: boolean
   result?: T
   error_code?: number
@@ -355,7 +363,7 @@ export class TelegramBotService {
       status: IntegrationStatus.CONNECTED,
       userId: '',
       config: {
-        botToken: config.botToken,
+        botToken: config.botToken!,
         botId: botInfo.id.toString(),
       },
       metadata: {
