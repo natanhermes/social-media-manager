@@ -17,7 +17,32 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog'
-import { SimpleMessage } from '@/hooks/queries/useMessages'
+interface MessageDelivery {
+  id: string
+  status: string
+  sentAt: Date | null
+  errorMessage: string | null
+  selectedConversation: {
+    name: string
+    externalId: string
+    type: string
+  }
+  integration: {
+    name: string
+    platform: string
+  }
+}
+
+interface SimpleMessage {
+  id: string
+  content: string
+  createdAt: Date
+  scheduledFor: Date | null
+  isScheduled: boolean
+  sentAt: Date | null
+  userId: string
+  messageDeliveries: MessageDelivery[]
+}
 
 interface MessageDetailsModalProps {
   message: SimpleMessage | null

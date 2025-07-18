@@ -2,12 +2,13 @@
 
 import { zodResolver } from '@hookform/resolvers/zod'
 import { Calendar, Send } from 'lucide-react'
-import { useState } from 'react'
+import { useRouter } from 'next/navigation'
+import { useEffect, useState, useTransition } from 'react'
 import { useForm } from 'react-hook-form'
 import { toast } from 'sonner'
 
-import { useIntegrations } from '@/hooks/queries/useIntegrations'
-import { useSendMessage } from '@/hooks/queries/useSendMessage'
+import { getIntegrationsAction } from '@/actions/integrationActions'
+import { sendMessageAction } from '@/actions/messageActions'
 import {
   MessageFormData,
   messageFormSchema,
@@ -44,86 +45,120 @@ import { Textarea } from './ui/textarea'
 
 export function MessageComposer() {
   const [isScheduleDialogOpen, setIsScheduleDialogOpen] = useState(false)
-  const { data: integrations } = useIntegrations()
-  const sendMessageMutation = useSendMessage()
+  const [integrations, setIntegrations] = useState<Integration[]>([])
+  const [isLoadingIntegrations, setIsLoadingIntegrations] = useState(true)
+  const [isPending, startTransition] = useTransition()
+  const router = useRouter()
 
   const form = useForm<MessageFormData>({
     resolver: zodResolver(messageFormSchema),
     defaultValues: {
       message: '',
+      platforms: [],
       scheduled: false,
       scheduledDate: '',
       scheduledTime: '',
     },
   })
 
-  const handleSubmit = async (data: MessageFormData) => {
-    try {
-      const response = await sendMessageMutation.mutateAsync(data)
-
-      if (response.success) {
-        toast.success('Mensagem enviada com sucesso!', {
-          description: response.message,
-        })
-
-        form.reset()
-        setIsScheduleDialogOpen(false)
-      } else {
-        toast.error('Erro ao enviar mensagem', {
-          description: response.message,
-        })
+  // Carregar integrações no client-side
+  useEffect(() => {
+    const loadIntegrations = async () => {
+      try {
+        const result = await getIntegrationsAction()
+        if (result.success) {
+          setIntegrations(result.data as Integration[])
+        } else {
+          toast.error('Erro ao carregar integrações')
+        }
+      } catch (error) {
+        toast.error('Erro ao carregar integrações')
+      } finally {
+        setIsLoadingIntegrations(false)
       }
-
-      if (response.errors && response.errors.length > 0) {
-        response.errors.forEach((error) => {
-          toast.error(`Erro na plataforma ${error.platform}`, {
-            description: error.error,
-          })
-        })
-      }
-    } catch (error) {
-      const errorMessage =
-        error instanceof Error
-          ? error.message
-          : 'Erro desconhecido ao enviar mensagem'
-
-      toast.error('Erro ao enviar mensagem', {
-        description: errorMessage,
-      })
     }
+
+    loadIntegrations()
+  }, [])
+
+  const onSubmit = async (data: MessageFormData) => {
+    startTransition(async () => {
+      try {
+        const result = await sendMessageAction(data)
+
+        if (result.success) {
+          toast.success('Mensagem enviada com sucesso!')
+          form.reset()
+          setIsScheduleDialogOpen(false)
+          router.refresh() // Atualizar a página para mostrar novos dados
+        } else {
+          toast.error(
+            'error' in result ? result.error : 'Erro ao enviar mensagem',
+          )
+        }
+      } catch (error) {
+        toast.error('Erro interno do servidor')
+      }
+    })
   }
 
-  const handleSchedule = () => {
-    form.setValue('scheduled', true)
-    setIsScheduleDialogOpen(true)
+  const handleScheduleToggle = (scheduled: boolean) => {
+    form.setValue('scheduled', scheduled)
+    setIsScheduleDialogOpen(scheduled)
   }
 
-  const handleSendNow = () => {
-    form.setValue('scheduled', false)
-    form.handleSubmit(handleSubmit)()
-  }
-
-  const handleScheduleConfirm = () => {
-    form.handleSubmit(handleSubmit)()
-  }
-
-  const connectedIntegrations = (integrations?.data || []).filter(
-    (integration: Integration) => integration.status === 'CONNECTED',
+  const connectedIntegrations = integrations.filter(
+    (integration) => integration.status === 'CONNECTED',
   )
 
-  const isLoading = sendMessageMutation.isPending
+  if (isLoadingIntegrations) {
+    return (
+      <Card>
+        <CardContent className="p-6">
+          <div className="flex items-center justify-center">
+            <Spinner />
+            <span className="ml-2">Carregando integrações...</span>
+          </div>
+        </CardContent>
+      </Card>
+    )
+  }
+
+  if (connectedIntegrations.length === 0) {
+    return (
+      <Card>
+        <CardHeader>
+          <CardTitle>Nova Mensagem</CardTitle>
+          <CardDescription>
+            Envie mensagens para suas redes sociais conectadas
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <div className="text-center py-8">
+            <Send className="h-12 w-12 text-gray-400 mx-auto mb-4" />
+            <h3 className="text-lg font-medium text-gray-900 mb-2">
+              Nenhuma integração conectada
+            </h3>
+            <p className="text-gray-600">
+              Conecte uma plataforma para começar a enviar mensagens.
+            </p>
+          </div>
+        </CardContent>
+      </Card>
+    )
+  }
 
   return (
-    <Form {...form}>
-      <form onSubmit={form.handleSubmit(handleSubmit)}>
-        <Card>
-          <CardHeader>
-            <CardTitle>Nova Mensagem</CardTitle>
-            <CardDescription>
-              Envie mensagens para múltiplas plataformas
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-4">
+    <Card>
+      <CardHeader>
+        <CardTitle>Nova Mensagem</CardTitle>
+        <CardDescription>
+          Envie mensagens para suas redes sociais conectadas
+        </CardDescription>
+      </CardHeader>
+      <CardContent>
+        <Form {...form}>
+          <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
             <FormField
               control={form.control}
               name="message"
@@ -132,8 +167,8 @@ export function MessageComposer() {
                   <FormLabel>Mensagem</FormLabel>
                   <FormControl>
                     <Textarea
-                      placeholder="Digite sua mensagem aqui..."
-                      className="min-h-[100px] resize-none"
+                      placeholder="Digite sua mensagem..."
+                      className="min-h-[100px]"
                       {...field}
                     />
                   </FormControl>
@@ -142,49 +177,69 @@ export function MessageComposer() {
               )}
             />
 
-            <div className="rounded-lg border p-4 bg-muted/50">
-              <h4 className="text-sm font-medium mb-2">
-                Integrações Conectadas
-              </h4>
-              {connectedIntegrations.length > 0 ? (
-                <div className="space-y-2">
-                  {connectedIntegrations.map((integration) => (
-                    <div
-                      key={integration.id}
-                      className="flex items-center space-x-2 text-sm"
-                    >
-                      <div className="h-2 w-2 bg-green-500 rounded-full"></div>
-                      <span>{integration.name}</span>
-                    </div>
-                  ))}
-                  <p className="text-xs text-muted-foreground mt-2">
-                    A mensagem será enviada para os grupos selecionados em todas
-                    as integrações conectadas.
-                  </p>
-                </div>
-              ) : (
-                <p className="text-sm text-muted-foreground">
-                  Nenhuma integração conectada. Configure uma integração do
-                  WhatsApp primeiro.
-                </p>
+            <FormField
+              control={form.control}
+              name="platforms"
+              render={() => (
+                <FormItem>
+                  <FormLabel>Integrações</FormLabel>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    {connectedIntegrations.map((integration) => (
+                      <FormField
+                        key={integration.id}
+                        control={form.control}
+                        name="platforms"
+                        render={({ field }) => {
+                          return (
+                            <FormItem
+                              key={integration.id}
+                              className="flex flex-row items-start space-x-3 space-y-0"
+                            >
+                              <FormControl>
+                                <input
+                                  type="checkbox"
+                                  checked={field.value?.includes(
+                                    integration.id,
+                                  )}
+                                  onChange={(checked) => {
+                                    const currentValue = field.value || []
+                                    return checked.target.checked
+                                      ? field.onChange([
+                                          ...currentValue,
+                                          integration.id,
+                                        ])
+                                      : field.onChange(
+                                          currentValue?.filter(
+                                            (value) => value !== integration.id,
+                                          ),
+                                        )
+                                  }}
+                                />
+                              </FormControl>
+                              <FormLabel className="text-sm font-normal">
+                                {integration.name} ({integration.platform})
+                              </FormLabel>
+                            </FormItem>
+                          )
+                        }}
+                      />
+                    ))}
+                  </div>
+                  <FormMessage />
+                </FormItem>
               )}
-            </div>
+            />
 
             <div className="flex gap-4">
-              <Button
-                type="button"
-                className="flex-1"
-                onClick={handleSendNow}
-                disabled={isLoading}
-              >
-                {isLoading ? (
+              <Button type="submit" disabled={isPending} className="flex-1">
+                {isPending ? (
                   <>
                     <Spinner />
-                    Enviando...
+                    <span className="ml-2">Enviando...</span>
                   </>
                 ) : (
                   <>
-                    <Send className="mr-2 h-4 w-4" />
+                    <Send className="h-4 w-4 mr-2" />
                     Enviar Agora
                   </>
                 )}
@@ -196,12 +251,11 @@ export function MessageComposer() {
               >
                 <DialogTrigger asChild>
                   <Button
-                    variant="outline"
-                    className="flex-1"
                     type="button"
-                    onClick={handleSchedule}
+                    variant="outline"
+                    onClick={() => handleScheduleToggle(true)}
                   >
-                    <Calendar className="mr-2 h-4 w-4" />
+                    <Calendar className="h-4 w-4 mr-2" />
                     Agendar
                   </Button>
                 </DialogTrigger>
@@ -212,7 +266,7 @@ export function MessageComposer() {
                       Escolha a data e hora para enviar sua mensagem
                     </DialogDescription>
                   </DialogHeader>
-                  <div className="space-y-4 py-4">
+                  <div className="space-y-4">
                     <FormField
                       control={form.control}
                       name="scheduledDate"
@@ -239,28 +293,44 @@ export function MessageComposer() {
                         </FormItem>
                       )}
                     />
+                    <div className="flex gap-2">
+                      <Button
+                        type="submit"
+                        disabled={isPending}
+                        className="flex-1"
+                        onClick={() => {
+                          form.setValue('scheduled', true)
+                        }}
+                      >
+                        {isPending ? (
+                          <>
+                            <Spinner />
+                            <span className="ml-2">Agendando...</span>
+                          </>
+                        ) : (
+                          'Agendar Mensagem'
+                        )}
+                      </Button>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        onClick={() => {
+                          handleScheduleToggle(false)
+                          form.setValue('scheduled', false)
+                          form.setValue('scheduledDate', '')
+                          form.setValue('scheduledTime', '')
+                        }}
+                      >
+                        Cancelar
+                      </Button>
+                    </div>
                   </div>
-                  <Button
-                    type="button"
-                    className="w-full"
-                    onClick={handleScheduleConfirm}
-                    disabled={isLoading}
-                  >
-                    {isLoading ? (
-                      <>
-                        <Spinner />
-                        Agendando...
-                      </>
-                    ) : (
-                      'Confirmar Agendamento'
-                    )}
-                  </Button>
                 </DialogContent>
               </Dialog>
             </div>
-          </CardContent>
-        </Card>
-      </form>
-    </Form>
+          </form>
+        </Form>
+      </CardContent>
+    </Card>
   )
 }

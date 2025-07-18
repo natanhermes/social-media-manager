@@ -2,11 +2,12 @@
 
 import { zodResolver } from '@hookform/resolvers/zod'
 import { CheckCircle, Loader2, MessageCircle, QrCode } from 'lucide-react'
-import { useState } from 'react'
+import { useRouter } from 'next/navigation'
+import { useState, useTransition } from 'react'
 import { useForm } from 'react-hook-form'
 import { toast } from 'sonner'
 
-import { useCreateIntegration } from '@/hooks/queries/useIntegrations'
+import { createIntegrationAction } from '@/actions/integrationActions'
 import { useConnectionPolling } from '@/hooks/use-connection-polling'
 import {
   IntegrationsFormData,
@@ -45,8 +46,8 @@ export function WhatsAppConnectionModal({
     qrCode?: string
     instanceName?: string
   } | null>(null)
-
-  const createIntegration = useCreateIntegration()
+  const [isPending, startTransition] = useTransition()
+  const router = useRouter()
 
   const { status } = useConnectionPolling({
     instanceName: testResult?.instanceName || '',
@@ -67,50 +68,83 @@ export function WhatsAppConnectionModal({
   })
 
   const handleTestConnection = async (data: IntegrationsFormData) => {
-    try {
-      setStep('testing')
-      const result = await createIntegration.mutateAsync({
-        config: data,
-        testConnection: true,
-      })
+    startTransition(async () => {
+      try {
+        setStep('testing')
 
-      setTestResult({
-        success: true,
-        setupInstructions: result.setupInstructions,
-        qrCode: result.qrCode,
-        instanceName: data.instanceName,
-      })
+        // Para teste de conexão, podemos fazer uma chamada para a API diretamente
+        const response = await fetch('/api/integrations', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            config: data,
+            testConnection: true,
+          }),
+        })
 
-      if (result.qrCode) {
-        setStep('qr-waiting')
-      } else {
-        setStep('success')
+        if (!response.ok) {
+          throw new Error('Erro ao testar conexão')
+        }
+
+        const result = await response.json()
+
+        if (result.success) {
+          setTestResult({
+            success: true,
+            setupInstructions: result.setupInstructions,
+            qrCode: result.qrCode,
+            instanceName: data.instanceName,
+          })
+
+          if (result.qrCode) {
+            setStep('qr-waiting')
+          } else {
+            setStep('success')
+          }
+        } else {
+          throw new Error(result.error || 'Erro ao testar conexão')
+        }
+      } catch (error) {
+        toast.error(
+          error instanceof Error ? error.message : 'Erro ao testar conexão',
+        )
+        setStep('form')
       }
-    } catch (error) {
-      setStep('form')
-    }
+    })
   }
 
   const handleSaveIntegration = async () => {
-    try {
-      await createIntegration.mutateAsync({
-        config: form.getValues(),
-        testConnection: false,
-      })
+    startTransition(async () => {
+      try {
+        const result = await createIntegrationAction({
+          config: form.getValues(),
+          testConnection: false,
+        })
 
-      toast.success('Instância do WhatsApp conectada com sucesso!')
-      setOpen((prev) => !prev)
-      onSuccess?.()
+        if (result.success) {
+          toast.success('Instância do WhatsApp conectada com sucesso!')
+          setOpen(false)
+          onSuccess?.()
+          router.refresh()
 
-      form.reset()
-      setStep('form')
-    } catch (error) {
-      toast.error(
-        error instanceof Error
-          ? error.message
-          : 'Erro ao conectar instância do WhatsApp',
-      )
-    }
+          form.reset()
+          setStep('form')
+          setTestResult(null)
+        } else {
+          throw new Error(
+            'error' in result ? result.error : 'Erro ao conectar instância',
+          )
+        }
+      } catch (error) {
+        toast.error(
+          error instanceof Error
+            ? error.message
+            : 'Erro ao conectar instância do WhatsApp',
+        )
+      }
+    })
   }
 
   const handleClose = async () => {
@@ -120,8 +154,9 @@ export function WhatsAppConnectionModal({
       })
     }
 
-    setOpen((prev) => !prev)
+    setOpen(false)
     setStep('form')
+    setTestResult(null)
   }
 
   return (
@@ -174,8 +209,8 @@ export function WhatsAppConnectionModal({
               <Button variant="outline" onClick={handleClose}>
                 Cancelar
               </Button>
-              <Button type="submit" disabled={createIntegration.isPending}>
-                {createIntegration.isPending ? (
+              <Button type="submit" disabled={isPending}>
+                {isPending ? (
                   <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                 ) : (
                   <CheckCircle className="mr-2 h-4 w-4" />
@@ -296,11 +331,8 @@ export function WhatsAppConnectionModal({
               <Button variant="outline" onClick={handleClose}>
                 Cancelar
               </Button>
-              <Button
-                onClick={handleSaveIntegration}
-                disabled={createIntegration.isPending}
-              >
-                {createIntegration.isPending ? (
+              <Button onClick={handleSaveIntegration} disabled={isPending}>
+                {isPending ? (
                   <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                 ) : (
                   <CheckCircle className="mr-2 h-4 w-4" />

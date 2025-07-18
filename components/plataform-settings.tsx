@@ -2,9 +2,9 @@
 
 import { Loader2 } from 'lucide-react'
 import Link from 'next/link'
-import { useMemo } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 
-import { useIntegrations } from '@/hooks/queries/useIntegrations'
+import { getIntegrationsAction } from '@/actions/integrationActions'
 import { getPlatformConfig, PlatformType } from '@/lib/platform-config'
 import { Integration, IntegrationStatus } from '@/types/integrations'
 
@@ -34,18 +34,37 @@ const statusColorMap: Record<IntegrationStatus, string> = {
 }
 
 export function PlataformSettings() {
-  const { data: integrations, isLoading } = useIntegrations()
+  const [integrations, setIntegrations] = useState<Integration[]>([])
+  const [isLoading, setIsLoading] = useState(true)
+
+  useEffect(() => {
+    const loadIntegrations = async () => {
+      try {
+        setIsLoading(true)
+        const result = await getIntegrationsAction()
+        if (result.success) {
+          setIntegrations(result.data as Integration[])
+        }
+      } catch (error) {
+        console.error('Erro ao carregar integrações:', error)
+      } finally {
+        setIsLoading(false)
+      }
+    }
+
+    loadIntegrations()
+  }, [])
 
   // Agrupa integrações por plataforma e calcula status
   const platformStatus = useMemo(() => {
-    if (!integrations?.data) return {}
+    if (!integrations) return {}
 
     const platforms: Record<
       string,
       { connected: boolean; integrations: Integration[] }
     > = {}
 
-    integrations.data.forEach((integration) => {
+    integrations.forEach((integration) => {
       const platform = integration.platform as PlatformType
 
       if (!platforms[platform]) {
@@ -64,7 +83,7 @@ export function PlataformSettings() {
     })
 
     return platforms
-  }, [integrations?.data])
+  }, [integrations])
 
   return (
     <div className="space-y-6">

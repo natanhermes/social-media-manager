@@ -2,11 +2,12 @@
 
 import { zodResolver } from '@hookform/resolvers/zod'
 import { Bot, CheckCircle, Loader2 } from 'lucide-react'
-import { useState } from 'react'
+import { useRouter } from 'next/navigation'
+import { useState, useTransition } from 'react'
 import { useForm } from 'react-hook-form'
 import { toast } from 'sonner'
 
-import { useCreateIntegration } from '@/hooks/queries/useIntegrations'
+import { createIntegrationAction } from '@/actions/integrationActions'
 import {
   IntegrationsFormData,
   integrationsFormSchema,
@@ -47,8 +48,8 @@ export function TelegramConnectionModal({
       username: string
     }
   } | null>(null)
-
-  const createIntegration = useCreateIntegration()
+  const [isPending, startTransition] = useTransition()
+  const router = useRouter()
 
   const form = useForm<IntegrationsFormData>({
     resolver: zodResolver(integrationsFormSchema),
@@ -58,51 +59,82 @@ export function TelegramConnectionModal({
   })
 
   const handleTestConnection = async (data: IntegrationsFormData) => {
-    try {
-      setStep('testing')
-      const result = await createIntegration.mutateAsync({
-        config: data,
-        testConnection: true,
-      })
+    startTransition(async () => {
+      try {
+        setStep('testing')
 
-      setTestResult({
-        success: true,
-        setupInstructions: result.setupInstructions,
-      })
+        // Para teste de conexão, podemos fazer uma chamada para a API diretamente
+        const response = await fetch('/api/integrations', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            config: data,
+            testConnection: true,
+          }),
+        })
 
-      setStep('connected')
-      setTimeout(() => {
-        setStep('success')
-      }, 2000)
-    } catch (error) {
-      setStep('form')
-    }
+        if (!response.ok) {
+          throw new Error('Erro ao testar conexão')
+        }
+
+        const result = await response.json()
+
+        if (result.success) {
+          setTestResult({
+            success: true,
+            setupInstructions: result.setupInstructions,
+          })
+
+          setStep('connected')
+          setTimeout(() => {
+            setStep('success')
+          }, 2000)
+        } else {
+          throw new Error(result.error || 'Erro ao testar conexão')
+        }
+      } catch (error) {
+        toast.error(
+          error instanceof Error ? error.message : 'Erro ao testar conexão',
+        )
+        setStep('form')
+      }
+    })
   }
 
   const handleSaveIntegration = async () => {
-    try {
-      await createIntegration.mutateAsync({
-        config: form.getValues(),
-        testConnection: false,
-      })
+    startTransition(async () => {
+      try {
+        const result = await createIntegrationAction({
+          config: form.getValues(),
+          testConnection: false,
+        })
 
-      toast.success('Bot do Telegram conectado com sucesso!')
-      setOpen((prev) => !prev)
-      onSuccess?.()
+        if (result.success) {
+          toast.success('Bot do Telegram conectado com sucesso!')
+          setOpen(false)
+          onSuccess?.()
+          router.refresh()
 
-      form.reset()
-      setStep('form')
-    } catch (error) {
-      toast.error(
-        error instanceof Error
-          ? error.message
-          : 'Erro ao conectar bot do Telegram',
-      )
-    }
+          form.reset()
+          setStep('form')
+          setTestResult(null)
+        } else {
+          throw new Error(result.error || 'Erro ao conectar bot')
+        }
+      } catch (error) {
+        toast.error(
+          error instanceof Error
+            ? error.message
+            : 'Erro ao conectar bot do Telegram',
+        )
+      }
+    })
   }
 
   const handleClose = async () => {
-    setOpen((prev) => !prev)
+    setOpen(false)
     setStep('form')
     setTestResult(null)
   }
@@ -111,7 +143,7 @@ export function TelegramConnectionModal({
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>
         {trigger || (
-          <Button>
+          <Button variant="outline">
             <Bot className="mr-2 h-4 w-4" />
             Conectar Telegram
           </Button>
@@ -173,8 +205,8 @@ export function TelegramConnectionModal({
               <Button variant="outline" onClick={handleClose}>
                 Cancelar
               </Button>
-              <Button type="submit" disabled={createIntegration.isPending}>
-                {createIntegration.isPending ? (
+              <Button type="submit" disabled={isPending}>
+                {isPending ? (
                   <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                 ) : (
                   <CheckCircle className="mr-2 h-4 w-4" />
@@ -258,11 +290,8 @@ export function TelegramConnectionModal({
               <Button variant="outline" onClick={handleClose}>
                 Cancelar
               </Button>
-              <Button
-                onClick={handleSaveIntegration}
-                disabled={createIntegration.isPending}
-              >
-                {createIntegration.isPending ? (
+              <Button onClick={handleSaveIntegration} disabled={isPending}>
+                {isPending ? (
                   <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                 ) : (
                   <CheckCircle className="mr-2 h-4 w-4" />

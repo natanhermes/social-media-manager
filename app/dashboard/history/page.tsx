@@ -3,8 +3,9 @@
 import { format } from 'date-fns'
 import { ptBR } from 'date-fns/locale'
 import { Clock, Download, Filter, Search, Send, XCircle } from 'lucide-react'
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 
+import { getMessagesAction } from '@/actions/messageActions'
 import { MessageDetailsModal } from '@/components/message-details-modal'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -31,10 +32,33 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table'
-import {
-  type MessageWithDeliveries,
-  useMessages,
-} from '@/hooks/queries/useMessages'
+
+interface MessageDelivery {
+  id: string
+  status: string
+  sentAt: Date | null
+  errorMessage: string | null
+  selectedConversation: {
+    name: string
+    externalId: string
+    type: string
+  }
+  integration: {
+    name: string
+    platform: string
+  }
+}
+
+interface MessageWithDeliveries {
+  id: string
+  content: string
+  createdAt: Date
+  scheduledFor: Date | null
+  isScheduled: boolean
+  sentAt: Date | null
+  userId: string
+  messageDeliveries: MessageDelivery[]
+}
 
 export default function HistoryPage() {
   const [searchTerm, setSearchTerm] = useState('')
@@ -43,9 +67,30 @@ export default function HistoryPage() {
   const [selectedMessage, setSelectedMessage] =
     useState<MessageWithDeliveries | null>(null)
   const [isDetailsModalOpen, setIsDetailsModalOpen] = useState(false)
+  const [messages, setMessages] = useState<MessageWithDeliveries[]>([])
+  const [isLoading, setIsLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
 
-  const { data: messagesResponse, isLoading, error } = useMessages(0)
-  const messages = messagesResponse?.data || []
+  useEffect(() => {
+    const loadMessages = async () => {
+      try {
+        setIsLoading(true)
+        setError(null)
+        const result = await getMessagesAction(0)
+        if (result.success) {
+          setMessages(result.data as MessageWithDeliveries[])
+        } else {
+          setError(result.error || 'Erro ao carregar mensagens')
+        }
+      } catch (error) {
+        setError('Erro ao carregar mensagens')
+      } finally {
+        setIsLoading(false)
+      }
+    }
+
+    loadMessages()
+  }, [])
 
   const getStatusBadge = (deliveries: Array<{ status: string }>) => {
     if (deliveries.length === 0) {
@@ -197,9 +242,7 @@ export default function HistoryPage() {
       <div className="flex items-center justify-center h-64">
         <div className="text-center">
           <XCircle className="h-8 w-8 text-red-500 mx-auto" />
-          <p className="mt-2 text-sm text-red-600">
-            Erro ao carregar mensagens
-          </p>
+          <p className="mt-2 text-sm text-red-600">{error}</p>
         </div>
       </div>
     )

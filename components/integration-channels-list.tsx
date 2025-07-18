@@ -1,15 +1,10 @@
 'use client'
 
 import { AlertCircle, Users } from 'lucide-react'
-import { useMemo } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { toast } from 'sonner'
 
-import {
-  useIntegrationChannels,
-  useSelectedConversations,
-  useToggleSelectedConversation,
-} from '@/hooks/queries/useIntegrations'
-import { ConversationChannel } from '@/types/integrations'
+import { ConversationChannel, SelectedConversation } from '@/types/integrations'
 
 import { Card, CardDescription, CardHeader, CardTitle } from './ui/card'
 import { Checkbox } from './ui/checkbox'
@@ -23,12 +18,51 @@ interface IntegrationChannelsListProps {
 export function IntegrationChannelsList({
   integrationId,
 }: IntegrationChannelsListProps) {
-  const { data, isLoading, error } = useIntegrationChannels(integrationId)
-  const { data: selectedData } = useSelectedConversations(integrationId)
-  const toggleSelection = useToggleSelectedConversation()
+  const [channels, setChannels] = useState<ConversationChannel[]>([])
+  const [selectedConversations, setSelectedConversations] = useState<
+    SelectedConversation[]
+  >([])
+  const [isLoading, setIsLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
+  const [isToggling, setIsToggling] = useState(false)
 
-  const channels = data?.data || []
-  const selectedConversations = selectedData?.data || []
+  const loadData = async () => {
+    try {
+      setIsLoading(true)
+      setError(null)
+
+      // Buscar canais e conversas selecionadas em paralelo
+      const [channelsResponse, selectedResponse] = await Promise.all([
+        fetch(`/api/integrations/${integrationId}/channels`),
+        fetch(`/api/integrations/${integrationId}/selected-conversations`),
+      ])
+
+      if (channelsResponse.ok) {
+        const channelsData = await channelsResponse.json()
+        if (channelsData.success) {
+          setChannels(channelsData.data || [])
+        }
+      }
+
+      if (selectedResponse.ok) {
+        const selectedData = await selectedResponse.json()
+        if (selectedData.success) {
+          setSelectedConversations(selectedData.data || [])
+        }
+      }
+    } catch (error) {
+      console.error('Erro ao carregar dados:', error)
+      setError('Erro ao carregar grupos')
+    } finally {
+      setIsLoading(false)
+    }
+  }
+
+  useEffect(() => {
+    if (integrationId) {
+      loadData()
+    }
+  }, [integrationId])
 
   // Combinar dados de canais com conversas selecionadas
   const channelsWithSelection = useMemo(() => {
@@ -44,23 +78,47 @@ export function IntegrationChannelsList({
     channel: ConversationChannel & { selected: boolean },
   ) => {
     try {
-      await toggleSelection.mutateAsync({
-        integrationId,
-        externalId: channel.id,
-        name: channel.name,
-        type: channel.type,
-        selected: !channel.selected,
-      })
+      setIsToggling(true)
 
-      if (!channel.selected) {
-        toast.success(`Grupo "${channel.name}" selecionado`)
+      const response = await fetch(
+        `/api/integrations/${integrationId}/selected-conversations`,
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            externalId: channel.id,
+            name: channel.name,
+            type: channel.type,
+            selected: !channel.selected,
+          }),
+        },
+      )
+
+      if (response.ok) {
+        const result = await response.json()
+        if (result.success) {
+          // Recarregar dados para sincronizar
+          await loadData()
+
+          if (!channel.selected) {
+            toast.success(`Grupo "${channel.name}" selecionado`)
+          } else {
+            toast.success(`Grupo "${channel.name}" removido da seleção`)
+          }
+        } else {
+          toast.error(result.error || 'Erro ao atualizar seleção')
+        }
       } else {
-        toast.success(`Grupo "${channel.name}" removido da seleção`)
+        toast.error('Erro ao atualizar seleção')
       }
     } catch (error) {
       toast.error(
         `Erro ao ${!channel.selected ? 'selecionar' : 'remover'} grupo: ${error instanceof Error ? error.message : 'Erro desconhecido'}`,
       )
+    } finally {
+      setIsToggling(false)
     }
   }
 
@@ -105,9 +163,7 @@ export function IntegrationChannelsList({
               <AlertCircle className="h-5 w-5" />
               Erro ao carregar grupos
             </CardTitle>
-            <CardDescription>
-              Não foi possível carregar os grupos.
-            </CardDescription>
+            <CardDescription>{error}</CardDescription>
           </CardHeader>
         </Card>
       </div>
@@ -127,7 +183,7 @@ export function IntegrationChannelsList({
           <CardHeader>
             <CardTitle>Nenhum grupo encontrado</CardTitle>
             <CardDescription>
-              Não foi possível carregar os grupos.
+              Não foi possível carregar os grupos desta integração.
             </CardDescription>
           </CardHeader>
         </Card>
@@ -149,7 +205,7 @@ export function IntegrationChannelsList({
                       <Checkbox
                         checked={channel.selected}
                         onCheckedChange={() => handleToggleSelection(channel)}
-                        disabled={toggleSelection.isPending}
+                        disabled={isToggling}
                       />
                       <div className="p-2 rounded-lg bg-gray-100 text-purple-600">
                         {channel.metadata?.pictureUrl ? (

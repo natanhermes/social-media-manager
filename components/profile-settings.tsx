@@ -1,8 +1,9 @@
 'use client'
 
 import { Save, User } from 'lucide-react'
+import { useEffect, useState } from 'react'
 
-import { useUserProfile } from '@/hooks/queries/useUserProfile'
+import { getUserProfileAction } from '@/actions/userActions'
 
 import { Button } from './ui/button'
 import {
@@ -17,9 +18,43 @@ import { Label } from './ui/label'
 import { Skeleton } from './ui/skeleton'
 import { Textarea } from './ui/textarea'
 
+interface User {
+  id: string
+  name: string
+  email: string
+  username: string
+  company: string | null
+  bio: string | null
+  createdAt: Date
+  updatedAt: Date
+}
+
 export function ProfileSettings() {
-  const { data, isLoading, error } = useUserProfile()
-  const user = data?.data
+  const [user, setUser] = useState<User | null>(null)
+  const [isLoading, setIsLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
+
+  useEffect(() => {
+    const loadUserProfile = async () => {
+      try {
+        setIsLoading(true)
+        setError(null)
+        const result = await getUserProfileAction()
+
+        if (result.success) {
+          setUser(result.data)
+        } else {
+          setError(result.error || 'Erro desconhecido')
+        }
+      } catch (error) {
+        setError('Erro ao carregar perfil do usuário')
+      } finally {
+        setIsLoading(false)
+      }
+    }
+
+    loadUserProfile()
+  }, [])
 
   if (isLoading) {
     return (
@@ -74,10 +109,7 @@ export function ProfileSettings() {
             </CardDescription>
           </CardHeader>
           <CardContent>
-            <p className="text-red-500">
-              Não foi possível carregar as informações do perfil. Contate o
-              suporte.
-            </p>
+            <p className="text-red-500">{error}</p>
           </CardContent>
         </Card>
       </div>

@@ -1,12 +1,9 @@
-'use client'
-
 import { Clock, MessageSquare, Users } from 'lucide-react'
-import { useState } from 'react'
 
+import { getIntegrationsAction } from '@/actions/integrationActions'
+import { getMessagesAction } from '@/actions/messageActions'
 import { MessageComposer } from '@/components/message-composer'
-import { MessageDetailsModal } from '@/components/message-details-modal'
 import { Badge } from '@/components/ui/badge'
-import { Button } from '@/components/ui/button'
 import {
   Card,
   CardContent,
@@ -14,8 +11,6 @@ import {
   CardHeader,
   CardTitle,
 } from '@/components/ui/card'
-import { Skeleton } from '@/components/ui/skeleton'
-import { Spinner } from '@/components/ui/spinner'
 import {
   Table,
   TableBody,
@@ -24,22 +19,45 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table'
-import { useIntegrations } from '@/hooks/queries/useIntegrations'
-import {
-  type MessageWithDeliveries,
-  useMessages,
-} from '@/hooks/queries/useMessages'
 
-export default function DashboardPage() {
-  const { data: messagesResponse, isLoading: isLoadingMessages } =
-    useMessages(0)
-  const { data: integrations } = useIntegrations()
-  const [selectedMessage, setSelectedMessage] =
-    useState<MessageWithDeliveries | null>(null)
-  const [isModalOpen, setIsModalOpen] = useState(false)
+import { DashboardClient } from './dashboard-client'
 
-  const messages = messagesResponse?.data || []
-  const connectedIntegrations = (integrations?.data || []).filter(
+interface MessageDelivery {
+  id: string
+  status: string
+  sentAt: Date | null
+  errorMessage: string | null
+  selectedConversation: {
+    name: string
+    externalId: string
+    type: string
+  }
+  integration: {
+    name: string
+    platform: string
+  }
+}
+
+interface Message {
+  id: string
+  content: string
+  createdAt: Date
+  scheduledFor: Date | null
+  isScheduled: boolean
+  sentAt: Date | null
+  userId: string
+  messageDeliveries: MessageDelivery[]
+}
+
+export default async function DashboardPage() {
+  const [messagesResponse, integrationsResponse] = await Promise.all([
+    getMessagesAction(0),
+    getIntegrationsAction(),
+  ])
+
+  const messages = (messagesResponse?.data || []) as Message[]
+  const integrations = integrationsResponse?.data || []
+  const connectedIntegrations = integrations.filter(
     (integration) => integration.status === 'CONNECTED',
   )
 
@@ -64,21 +82,12 @@ export default function DashboardPage() {
     },
   ]
 
-  const handleViewMessage = (message: MessageWithDeliveries) => {
-    setSelectedMessage(message)
-    setIsModalOpen(true)
-  }
-
-  const getMessageStatus = (
-    messageDeliveries: MessageWithDeliveries['messageDeliveries'],
-  ) => {
+  const getMessageStatus = (messageDeliveries: MessageDelivery[]) => {
     if (!messageDeliveries || messageDeliveries.length === 0) {
       return { text: 'Sem deliveries', variant: 'secondary' as const }
     }
 
-    const statuses = messageDeliveries.map(
-      (d: MessageWithDeliveries['messageDeliveries'][0]) => d.status,
-    )
+    const statuses = messageDeliveries.map((d) => d.status)
     const hasSuccess = statuses.includes('SENT')
     const hasFailed = statuses.includes('FAILED')
     const hasScheduled = statuses.includes('SCHEDULED')
@@ -104,7 +113,7 @@ export default function DashboardPage() {
     return { text: 'Desconhecido', variant: 'secondary' as const }
   }
 
-  const getMessageDateTime = (message: MessageWithDeliveries) => {
+  const getMessageDateTime = (message: Message) => {
     // Para mensagens agendadas que ainda não foram enviadas
     if (message.isScheduled && message.scheduledFor && !message.sentAt) {
       return {
@@ -160,13 +169,9 @@ export default function DashboardPage() {
                   <p className="text-sm font-medium text-gray-600">
                     {stat.title}
                   </p>
-                  {isLoadingMessages ? (
-                    <Spinner />
-                  ) : (
-                    <p className="text-3xl font-bold text-gray-900">
-                      {stat.value}
-                    </p>
-                  )}
+                  <p className="text-3xl font-bold text-gray-900">
+                    {stat.value}
+                  </p>
                 </div>
                 <stat.icon className={`h-8 w-8 ${stat.color}`} />
               </div>
@@ -187,13 +192,7 @@ export default function DashboardPage() {
           </CardDescription>
         </CardHeader>
         <CardContent>
-          {isLoadingMessages ? (
-            <div className="space-y-4">
-              {[...Array(5)].map((_, i) => (
-                <Skeleton key={i} className="h-12 w-full" />
-              ))}
-            </div>
-          ) : messages.length === 0 ? (
+          {messages.length === 0 ? (
             <div className="text-center py-8">
               <MessageSquare className="h-12 w-12 text-gray-400 mx-auto mb-4" />
               <h3 className="text-lg font-medium text-gray-900 mb-2">
@@ -204,58 +203,47 @@ export default function DashboardPage() {
               </p>
             </div>
           ) : (
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Mensagem</TableHead>
-                  <TableHead>Data/Status de Envio</TableHead>
-                  <TableHead>Deliveries</TableHead>
-                  <TableHead>Status</TableHead>
-                  <TableHead>Ações</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {messages.map((msg) => {
-                  const status = getMessageStatus(msg.messageDeliveries)
-                  const dateTime = getMessageDateTime(msg)
-                  return (
-                    <TableRow key={msg.id}>
-                      <TableCell className="max-w-[300px] truncate">
-                        {msg.content}
-                      </TableCell>
-                      <TableCell>{dateTime.display}</TableCell>
-                      <TableCell>
-                        <span className="text-sm text-muted-foreground">
-                          {msg.messageDeliveries?.length || 0} envio(s)
-                        </span>
-                      </TableCell>
-                      <TableCell>
-                        <Badge variant={status.variant}>{status.text}</Badge>
-                      </TableCell>
-                      <TableCell>
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => handleViewMessage(msg)}
-                        >
-                          Detalhes
-                        </Button>
-                      </TableCell>
-                    </TableRow>
-                  )
-                })}
-              </TableBody>
-            </Table>
+            <div>
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Mensagem</TableHead>
+                    <TableHead>Data/Status de Envio</TableHead>
+                    <TableHead>Deliveries</TableHead>
+                    <TableHead>Status</TableHead>
+                    <TableHead>Ações</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {messages.map((msg: Message) => {
+                    const status = getMessageStatus(msg.messageDeliveries)
+                    const dateTime = getMessageDateTime(msg)
+                    return (
+                      <TableRow key={msg.id}>
+                        <TableCell className="max-w-[300px] truncate">
+                          {msg.content}
+                        </TableCell>
+                        <TableCell>{dateTime.display}</TableCell>
+                        <TableCell>
+                          <span className="text-sm text-muted-foreground">
+                            {msg.messageDeliveries?.length || 0} envio(s)
+                          </span>
+                        </TableCell>
+                        <TableCell>
+                          <Badge variant={status.variant}>{status.text}</Badge>
+                        </TableCell>
+                        <TableCell>
+                          <DashboardClient messageId={msg.id} />
+                        </TableCell>
+                      </TableRow>
+                    )
+                  })}
+                </TableBody>
+              </Table>
+            </div>
           )}
         </CardContent>
       </Card>
-
-      {/* Message Details Modal */}
-      <MessageDetailsModal
-        message={selectedMessage}
-        open={isModalOpen}
-        onOpenChange={setIsModalOpen}
-      />
     </div>
   )
 }
