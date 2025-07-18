@@ -24,8 +24,7 @@ model User {
   bio          String?
   messages     Message[]
   settings     Settings?
-  platforms    Platform[]
-  integrations Integration[] // Nova tabela de integrações
+  integrations Integration[]
   createdAt    DateTime      @default(now())
   updatedAt    DateTime      @updatedAt
 
@@ -33,37 +32,45 @@ model User {
 }
 
 model Message {
-  id         String   @id @default(uuid())
-  content    String
-  platforms  MessagePlatform[]
-  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  userId     String
-  createdAt  DateTime @default(now())
+  id              String              @id @default(uuid())
+  content         String
+  scheduledFor    DateTime?           // Data/hora de agendamento
+  isScheduled     Boolean             @default(false) // Flag para mensagens agendadas
+  sentAt          DateTime?           // Timestamp real do processamento/envio
+  user            User                @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId          String
+  messageDeliveries MessageDelivery[] // Rastreamento de envio por integração/conversa
+  createdAt       DateTime            @default(now())
+  updatedAt       DateTime            @updatedAt
 }
 
-enum MessageStatus {
-  success
-  failed
-  pending
+enum DeliveryStatus {
+  PENDING
+  PROCESSING
+  SENT
+  FAILED
+  SCHEDULED
 }
 
-enum PlatformName {
-  WHATSAPP
-  TELEGRAM
-  INSTAGRAM
-}
-
-model Platform {
-  id               String            @id @default(uuid())
-  name             PlatformName
-  token            String?
-  connected        Boolean           @default(false)
-  user             User              @relation(fields: [userId], references: [id], onDelete: Cascade)
-  userId           String
-  messagePlatforms MessagePlatform[] // Relacionamento reverso
-  lastSyncAt       DateTime?         // Última sincronização com a API
+// Nova tabela para rastrear envios por integração/conversa
+model MessageDelivery {
+  id                      String                @id @default(uuid())
+  message                 Message               @relation(fields: [messageId], references: [id], onDelete: Cascade)
+  messageId               String
+  integration             Integration           @relation(fields: [integrationId], references: [id], onDelete: Cascade)
+  integrationId           String
+  selectedConversation    SelectedConversation  @relation(fields: [selectedConversationId], references: [id], onDelete: Cascade)
+  selectedConversationId  String
+  status                  DeliveryStatus        @default(PENDING)
+  externalId              String?               // ID retornado pela API externa
+  sentAt                  DateTime?             // Timestamp do envio real
+  errorMessage            String?               // Mensagem de erro específica
+  retryCount              Int                   @default(0)
+  lastRetryAt             DateTime?             // Último retry
+  createdAt               DateTime              @default(now())
+  updatedAt               DateTime              @updatedAt
   
-  @@unique([userId, name])  // Um usuário não pode ter 2 conexões para a mesma plataforma
+  @@unique([messageId, integrationId, selectedConversationId]) // Não duplicar envio para mesma conversa
 }
 
 model Settings {
@@ -76,23 +83,7 @@ model Settings {
   userId              String   @unique
 }
 
-model MessagePlatform {
-  id          String        @id @default(uuid())
-  message     Message       @relation(fields: [messageId], references: [id], onDelete: Cascade)
-  messageId   String
-  platform    Platform      @relation(fields: [platformId], references: [id], onDelete: Cascade)
-  platformId  String
-  status      MessageStatus @default(pending)
-  sentAt      DateTime?     // Timestamp real do envio para esta plataforma
-  externalId  String?       // ID retornado pela API (tweet ID, post ID, etc.)
-  errorMsg    String?       // Mensagem de erro específica da plataforma
-  retryCount  Int          @default(0)  // Quantas vezes tentou reenviar
-  createdAt   DateTime     @default(now())
-  
-  @@unique([messageId, platformId])  // Uma mensagem não pode ser enviada 2x para a mesma plataforma
-}
-
-// Modelos para sistema de integrações com Evolution API
+// Modelos para sistema de integrações
 enum IntegrationPlatformType {
   WHATSAPP
   EVOLUTION
@@ -117,17 +108,21 @@ model Integration {
   user                    User                    @relation(fields: [userId], references: [id], onDelete: Cascade)
   userId                  String
   selectedConversations   SelectedConversation[]
+  messageDeliveries       MessageDelivery[]       // Rastreamento de envios
+  lastSyncAt              DateTime?               // Última sincronização
   createdAt               DateTime                @default(now())
   updatedAt               DateTime                @updatedAt
 }
 
 model SelectedConversation {
   id                  String              @id @default(uuid())
-  externalId          String              // ID da conversa na Evolution API
+  externalId          String              // ID da conversa na API externa
   name                String              // Nome da conversa (grupo ou contato)
   type                ConversationType    // Tipo da conversa
+  active              Boolean             @default(true) // Se está ativa para envios
   integration         Integration         @relation(fields: [integrationId], references: [id], onDelete: Cascade)
   integrationId       String
+  messageDeliveries   MessageDelivery[]   // Envios para esta conversa
   createdAt           DateTime            @default(now())
   updatedAt           DateTime            @updatedAt
   

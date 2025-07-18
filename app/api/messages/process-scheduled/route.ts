@@ -1,9 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server'
 
 import { auth } from '@/auth'
-import { listMessages } from '@/services/messageService'
+import { jobQueueService } from '@/services/jobQueueService'
 
-export async function GET(request: NextRequest) {
+export async function POST(_request: NextRequest) {
   try {
     const session = await auth()
     if (!session?.user?.id) {
@@ -17,17 +17,15 @@ export async function GET(request: NextRequest) {
       )
     }
 
-    const { searchParams } = new URL(request.url)
-    const page = parseInt(searchParams.get('page') || '0')
-
-    const messages = await listMessages(session.user.id, page)
+    // Processar retry de deliveries com falha
+    await jobQueueService.retryFailedDeliveries()
 
     return NextResponse.json({
       success: true,
-      data: messages,
+      message: 'Processamento de mensagens agendadas iniciado',
     })
   } catch (error) {
-    console.error('Erro ao buscar mensagens:', error)
+    console.error('Erro ao processar mensagens agendadas:', error)
     return NextResponse.json(
       {
         success: false,

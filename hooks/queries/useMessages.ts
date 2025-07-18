@@ -1,20 +1,41 @@
-import { Message } from '@prisma/client'
-import { useQuery, type UseQueryResult } from '@tanstack/react-query'
-
-export type SimpleMessage = Pick<
+import type {
+  Integration,
   Message,
-  'id' | 'content' | 'createdAt' | 'userId'
->
+  MessageDelivery,
+  SelectedConversation,
+} from '@prisma/client'
+import { useQuery, UseQueryResult } from '@tanstack/react-query'
+
+type MessageWithDeliveries = Message & {
+  messageDeliveries: (MessageDelivery & {
+    integration: Pick<Integration, 'name' | 'platform'>
+    selectedConversation: Pick<
+      SelectedConversation,
+      'name' | 'externalId' | 'type'
+    >
+  })[]
+}
+
+interface MessagesResponse {
+  success: boolean
+  data: MessageWithDeliveries[]
+}
 
 export function useMessages(
-  page: number,
-): UseQueryResult<SimpleMessage[], Error> {
+  page: number = 0,
+): UseQueryResult<MessagesResponse, Error> {
   return useQuery({
     queryKey: ['messages', page],
-    queryFn: async () => {
+    queryFn: async (): Promise<MessagesResponse> => {
       const response = await fetch(`/api/messages?page=${page}`)
-      const result = await response.json()
-      return result.data
+
+      if (!response.ok) {
+        throw new Error('Failed to fetch messages')
+      }
+
+      return response.json()
     },
   })
 }
+
+export type { MessageWithDeliveries }

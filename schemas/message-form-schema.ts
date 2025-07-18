@@ -11,9 +11,11 @@ export const messageFormSchema = z
       .refine(
         (date) => {
           if (!date) return true
-          const selectedDate = new Date(date)
+          // Normalizar as datas para evitar problemas de timezone
+          const selectedDate = new Date(date + 'T00:00:00')
           const today = new Date()
           today.setHours(0, 0, 0, 0)
+          selectedDate.setHours(0, 0, 0, 0)
           return selectedDate >= today
         },
         {
@@ -48,7 +50,8 @@ export const messageFormSchema = z
       if (!data.scheduled || !data.scheduledDate || !data.scheduledTime)
         return true
 
-      const selectedDate = new Date(data.scheduledDate)
+      // Normalizar a data selecionada para evitar problemas de timezone
+      const selectedDate = new Date(data.scheduledDate + 'T00:00:00')
       const today = new Date()
 
       // Se a data for hoje, verificar se o horário é futuro

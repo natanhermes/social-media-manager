@@ -12,7 +12,7 @@ import {
   MessageFormData,
   messageFormSchema,
 } from '@/schemas/message-form-schema'
-import { EvolutionIntegration } from '@/types/integrations'
+import { Integration } from '@/types/integrations'
 
 import { Button } from './ui/button'
 import {
@@ -108,7 +108,7 @@ export function MessageComposer() {
   }
 
   const connectedIntegrations = (integrations?.data || []).filter(
-    (integration: EvolutionIntegration) => integration.status === 'CONNECTED',
+    (integration: Integration) => integration.status === 'CONNECTED',
   )
 
   const isLoading = sendMessageMutation.isPending

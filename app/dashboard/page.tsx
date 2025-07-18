@@ -25,16 +25,20 @@ import {
   TableRow,
 } from '@/components/ui/table'
 import { useIntegrations } from '@/hooks/queries/useIntegrations'
-import { SimpleMessage, useMessages } from '@/hooks/queries/useMessages'
+import {
+  type MessageWithDeliveries,
+  useMessages,
+} from '@/hooks/queries/useMessages'
 
 export default function DashboardPage() {
-  const { data: messages = [], isLoading: isLoadingMessages } = useMessages(0)
+  const { data: messagesResponse, isLoading: isLoadingMessages } =
+    useMessages(0)
   const { data: integrations } = useIntegrations()
-  const [selectedMessage, setSelectedMessage] = useState<SimpleMessage | null>(
-    null,
-  )
+  const [selectedMessage, setSelectedMessage] =
+    useState<MessageWithDeliveries | null>(null)
   const [isModalOpen, setIsModalOpen] = useState(false)
 
+  const messages = messagesResponse?.data || []
   const connectedIntegrations = (integrations?.data || []).filter(
     (integration) => integration.status === 'CONNECTED',
   )
@@ -60,9 +64,80 @@ export default function DashboardPage() {
     },
   ]
 
-  const handleViewMessage = (message: SimpleMessage) => {
+  const handleViewMessage = (message: MessageWithDeliveries) => {
     setSelectedMessage(message)
     setIsModalOpen(true)
+  }
+
+  const getMessageStatus = (
+    messageDeliveries: MessageWithDeliveries['messageDeliveries'],
+  ) => {
+    if (!messageDeliveries || messageDeliveries.length === 0) {
+      return { text: 'Sem deliveries', variant: 'secondary' as const }
+    }
+
+    const statuses = messageDeliveries.map(
+      (d: MessageWithDeliveries['messageDeliveries'][0]) => d.status,
+    )
+    const hasSuccess = statuses.includes('SENT')
+    const hasFailed = statuses.includes('FAILED')
+    const hasScheduled = statuses.includes('SCHEDULED')
+    const hasPending =
+      statuses.includes('PENDING') || statuses.includes('PROCESSING')
+
+    if (hasScheduled) {
+      return { text: 'Agendada', variant: 'default' as const }
+    }
+    if (hasSuccess && !hasFailed && !hasPending) {
+      return { text: 'Enviada', variant: 'default' as const }
+    }
+    if (hasFailed && !hasSuccess) {
+      return { text: 'Falhou', variant: 'destructive' as const }
+    }
+    if (hasPending) {
+      return { text: 'Processando', variant: 'secondary' as const }
+    }
+    if (hasSuccess && hasFailed) {
+      return { text: 'Parcial', variant: 'secondary' as const }
+    }
+
+    return { text: 'Desconhecido', variant: 'secondary' as const }
+  }
+
+  const getMessageDateTime = (message: MessageWithDeliveries) => {
+    // Para mensagens agendadas que ainda não foram enviadas
+    if (message.isScheduled && message.scheduledFor && !message.sentAt) {
+      return {
+        display: (
+          <div className="flex items-center gap-1 text-blue-600">
+            <Clock className="h-3 w-3" />
+            <span className="text-xs">
+              Agendada para{' '}
+              {new Date(message.scheduledFor).toLocaleString('pt-BR')}
+            </span>
+          </div>
+        ),
+        sortValue: new Date(message.scheduledFor).getTime(),
+      }
+    }
+
+    // Para mensagens enviadas (tem sentAt)
+    if (message.sentAt) {
+      return {
+        display: new Date(message.sentAt).toLocaleString('pt-BR'),
+        sortValue: new Date(message.sentAt).getTime(),
+      }
+    }
+
+    // Para mensagens que ainda não foram enviadas (pendentes)
+    return {
+      display: (
+        <span className="text-muted-foreground text-xs italic">
+          Aguardando envio
+        </span>
+      ),
+      sortValue: 0, // Menor prioridade na ordenação
+    }
   }
 
   return (
@@ -104,7 +179,7 @@ export default function DashboardPage() {
       <MessageComposer />
 
       {/* Messages Table */}
-      <Card className="max-h-[500px] overflow-y-auto">
+      <Card>
         <CardHeader>
           <CardTitle>Mensagens Recentes</CardTitle>
           <CardDescription>
@@ -133,50 +208,42 @@ export default function DashboardPage() {
               <TableHeader>
                 <TableRow>
                   <TableHead>Mensagem</TableHead>
-                  <TableHead>Data de Envio</TableHead>
-                  <TableHead>Integrações</TableHead>
+                  <TableHead>Data/Status de Envio</TableHead>
+                  <TableHead>Deliveries</TableHead>
                   <TableHead>Status</TableHead>
                   <TableHead>Ações</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {messages.map((msg) => (
-                  <TableRow key={msg.id}>
-                    <TableCell className="max-w-[300px] truncate">
-                      {msg.content}
-                    </TableCell>
-                    <TableCell>
-                      {new Date(msg.createdAt).toLocaleString('pt-BR')}
-                    </TableCell>
-                    <TableCell>
-                      <div className="flex gap-1">
-                        {connectedIntegrations.map((integration) => (
-                          <Badge
-                            key={integration.id}
-                            variant="outline"
-                            className="bg-green-50"
-                          >
-                            {integration.name}
-                          </Badge>
-                        ))}
-                      </div>
-                    </TableCell>
-                    <TableCell>
-                      <Badge variant="default" className="bg-green-500">
-                        Enviada
-                      </Badge>
-                    </TableCell>
-                    <TableCell>
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => handleViewMessage(msg)}
-                      >
-                        Detalhes
-                      </Button>
-                    </TableCell>
-                  </TableRow>
-                ))}
+                {messages.map((msg) => {
+                  const status = getMessageStatus(msg.messageDeliveries)
+                  const dateTime = getMessageDateTime(msg)
+                  return (
+                    <TableRow key={msg.id}>
+                      <TableCell className="max-w-[300px] truncate">
+                        {msg.content}
+                      </TableCell>
+                      <TableCell>{dateTime.display}</TableCell>
+                      <TableCell>
+                        <span className="text-sm text-muted-foreground">
+                          {msg.messageDeliveries?.length || 0} envio(s)
+                        </span>
+                      </TableCell>
+                      <TableCell>
+                        <Badge variant={status.variant}>{status.text}</Badge>
+                      </TableCell>
+                      <TableCell>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => handleViewMessage(msg)}
+                        >
+                          Detalhes
+                        </Button>
+                      </TableCell>
+                    </TableRow>
+                  )
+                })}
               </TableBody>
             </Table>
           )}
