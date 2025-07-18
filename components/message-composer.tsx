@@ -87,14 +87,18 @@ export function MessageComposer() {
         const result = await sendMessageAction(data)
 
         if (result.success) {
-          toast.success('Mensagem enviada com sucesso!')
+          const successMessage = data.scheduled
+            ? 'Mensagem agendada com sucesso!'
+            : 'Mensagem enviada com sucesso!'
+          toast.success(successMessage)
           form.reset()
           setIsScheduleDialogOpen(false)
-          router.refresh() // Atualizar a página para mostrar novos dados
+          router.refresh()
         } else {
-          toast.error(
-            'error' in result ? result.error : 'Erro ao enviar mensagem',
-          )
+          const errorMessage = data.scheduled
+            ? 'Erro ao agendar mensagem'
+            : 'Erro ao enviar mensagem'
+          toast.error('error' in result ? result.error : errorMessage)
         }
       } catch (error) {
         toast.error('Erro interno do servidor')
@@ -105,6 +109,38 @@ export function MessageComposer() {
   const handleScheduleToggle = (scheduled: boolean) => {
     form.setValue('scheduled', scheduled)
     setIsScheduleDialogOpen(scheduled)
+
+    if (scheduled && !form.getValues('scheduledDate')) {
+      const tomorrow = new Date()
+      tomorrow.setDate(tomorrow.getDate() + 1)
+      const dateString = tomorrow.toISOString().split('T')[0]
+      form.setValue('scheduledDate', dateString)
+    }
+
+    if (scheduled && !form.getValues('scheduledTime')) {
+      const now = new Date()
+      now.setHours(now.getHours() + 1, 0, 0, 0)
+      const timeString = now.toTimeString().slice(0, 5)
+      form.setValue('scheduledTime', timeString)
+    }
+  }
+
+  const handleScheduleSubmit = async () => {
+    form.setValue('scheduled', true)
+
+    const platforms = form.getValues('platforms')
+    if (!platforms || platforms.length === 0) {
+      toast.error('Selecione pelo menos uma integração para agendar a mensagem')
+      return
+    }
+
+    const isValid = await form.trigger()
+
+    if (isValid) {
+      setIsScheduleDialogOpen(false)
+      const formData = form.getValues()
+      onSubmit(formData)
+    }
   }
 
   const connectedIntegrations = integrations.filter(
@@ -231,7 +267,12 @@ export function MessageComposer() {
             />
 
             <div className="flex gap-4">
-              <Button type="submit" disabled={isPending} className="flex-1">
+              <Button
+                type="submit"
+                disabled={isPending}
+                className="flex-1"
+                onClick={() => form.setValue('scheduled', false)}
+              >
                 {isPending ? (
                   <>
                     <Spinner />
@@ -295,12 +336,10 @@ export function MessageComposer() {
                     />
                     <div className="flex gap-2">
                       <Button
-                        type="submit"
+                        type="button"
                         disabled={isPending}
                         className="flex-1"
-                        onClick={() => {
-                          form.setValue('scheduled', true)
-                        }}
+                        onClick={handleScheduleSubmit}
                       >
                         {isPending ? (
                           <>

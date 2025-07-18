@@ -19,7 +19,6 @@ export async function sendMessageAction(data: MessageFormData) {
 
     const result = await sendMessage(session.user.id, data)
 
-    // Revalidar as páginas que mostram mensagens
     revalidatePath('/dashboard')
     revalidatePath('/dashboard/history')
 
