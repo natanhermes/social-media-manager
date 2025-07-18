@@ -172,8 +172,8 @@ export function IntegrationsList({
     <div className="space-y-6">
       {/* Header com botões de conexão */}
       <div className="flex flex-col sm:flex-row gap-4">
-        <WhatsAppConnectionModal />
-        <TelegramConnectionModal />
+        <WhatsAppConnectionModal onSuccess={loadIntegrations} />
+        <TelegramConnectionModal onSuccess={loadIntegrations} />
       </div>
 
       {/* Lista de integrações */}
